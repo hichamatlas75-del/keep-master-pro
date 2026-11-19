@@ -20,14 +20,14 @@ export const APP_CONFIG = {
     MEDIA_BLOBS: 'media_blobs'
   },
 
-  // Firebase Configuration Defaults (Configurable via Settings UI or environment)
+  // Firebase Configuration Defaults (Pre-configured for KEEP MASTER PRO)
   FIREBASE: {
-    API_KEY: '',
+    API_KEY: 'AIzaSyAm2mOkPWlx1ACgYaMF0hHQH-GR0nz-SnE',
     AUTH_DOMAIN: 'keep-master-pro.firebaseapp.com',
     PROJECT_ID: 'keep-master-pro',
-    STORAGE_BUCKET: 'keep-master-pro.appspot.com',
-    MESSAGING_SENDER_ID: '',
-    APP_ID: '',
+    STORAGE_BUCKET: 'keep-master-pro.firebasestorage.app',
+    MESSAGING_SENDER_ID: '368689220471',
+    APP_ID: '1:368689220471:web:b291bbfd16fdcb44502f72',
     COLLECTIONS: {
       NOTES: 'notes',
       LABELS: 'labels',
