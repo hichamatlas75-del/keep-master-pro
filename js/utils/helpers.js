@@ -7,7 +7,7 @@
  */
 export function generateId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID().replace(/-/g, '').slice(0, 20); // Appwrite compatible ID format (<=36 chars)
+    return crypto.randomUUID().replace(/-/g, '').slice(0, 20); // Standard unique ID format
   }
   return 'id_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 9);
 }

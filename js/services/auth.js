@@ -1,9 +1,9 @@
 /**
- * KEEP MASTER PRO - Appwrite Authentication Service
- * User registration, login, session management & Guest mode fallback.
+ * KEEP MASTER PRO - Firebase Authentication Service
+ * User registration, login, session state with onAuthStateChanged & Guest mode fallback.
  */
 
-import { appwrite } from './appwrite.js';
+import { firebase } from './firebase.js';
 import { db } from '../database/indexeddb.js';
 import { eventBus } from '../utils/event-bus.js';
 
@@ -11,27 +11,41 @@ class AuthService {
   constructor() {
     this.currentUser = null;
     this.isGuest = true;
+    this.authUnsubscribe = null;
   }
 
   async init() {
-    const isAppwriteReady = await appwrite.init();
-    if (!isAppwriteReady) {
+    const isFirebaseReady = await firebase.init();
+    if (!isFirebaseReady) {
       await this.setGuestUser();
       return this.currentUser;
     }
 
-    try {
-      const user = await appwrite.account.get();
-      this.currentUser = user;
-      this.isGuest = false;
-      await db.setSetting('current_user_id', user.$id);
-    } catch (err) {
-      // 401 or not logged in -> use guest session
-      await this.setGuestUser();
-    }
+    return new Promise((resolve) => {
+      const { onAuthStateChanged } = firebase.SDK.auth;
 
-    eventBus.emit('auth:change', { user: this.currentUser, isGuest: this.isGuest });
-    return this.currentUser;
+      this.authUnsubscribe = onAuthStateChanged(firebase.auth, async (user) => {
+        if (user) {
+          this.currentUser = {
+            $id: user.uid,
+            name: user.displayName || user.email?.split('@')[0] || 'Utilisateur',
+            email: user.email || '',
+            isAnonymous: user.isAnonymous
+          };
+          this.isGuest = false;
+          await db.setSetting('current_user_id', user.uid);
+        } else {
+          await this.setGuestUser();
+        }
+
+        eventBus.emit('auth:change', { user: this.currentUser, isGuest: this.isGuest });
+        eventBus.emit('sync:trigger');
+        resolve(this.currentUser);
+      }, (error) => {
+        console.warn('[Auth] Erreur écoute état Firebase Auth :', error);
+        this.setGuestUser().then(() => resolve(this.currentUser));
+      });
+    });
   }
 
   async setGuestUser() {
@@ -51,61 +65,69 @@ class AuthService {
   }
 
   /**
-   * Register a new user with Appwrite
+   * Register a new user with Firebase Authentication
    */
   async register(email, password, name) {
-    if (!appwrite.isConfigured) {
-      throw new Error('Appwrite Cloud n\'est pas encore configuré. Veuillez renseigner le Project ID dans les Paramètres.');
+    if (!firebase.isConfigured) {
+      throw new Error('Firebase n\'est pas encore configuré. Renseignez votre API Key et Project ID dans les Paramètres.');
     }
 
-    const { ID } = appwrite.SDK;
-    const user = await appwrite.account.create(ID.unique(), email, password, name);
-    // Auto-login after registration
-    await this.login(email, password);
-    return user;
+    const { createUserWithEmailAndPassword, updateProfile } = firebase.SDK.auth;
+    const userCredential = await createUserWithEmailAndPassword(firebase.auth, email, password);
+
+    if (name && updateProfile) {
+      await updateProfile(userCredential.user, { displayName: name });
+    }
+
+    this.currentUser = {
+      $id: userCredential.user.uid,
+      name: name || email.split('@')[0],
+      email: userCredential.user.email,
+      isAnonymous: false
+    };
+    this.isGuest = false;
+    await db.setSetting('current_user_id', userCredential.user.uid);
+
+    eventBus.emit('auth:change', { user: this.currentUser, isGuest: false });
+    eventBus.emit('sync:trigger');
+
+    return this.currentUser;
   }
 
   /**
    * Login with email and password
    */
   async login(email, password) {
-    if (!appwrite.isConfigured) {
-      throw new Error('Appwrite Cloud n\'est pas encore configuré. Vérifiez vos paramètres.');
+    if (!firebase.isConfigured) {
+      throw new Error('Firebase n\'est pas encore configuré. Vérifiez vos paramètres.');
     }
 
-    // If an active session exists, delete it first
-    try {
-      await appwrite.account.deleteSession('current');
-    } catch (e) {
-      // Ignore if no session
-    }
+    const { signInWithEmailAndPassword } = firebase.SDK.auth;
+    const userCredential = await signInWithEmailAndPassword(firebase.auth, email, password);
 
-    // Appwrite SDK v14/v16 uses createEmailPasswordSession
-    let session;
-    if (appwrite.account.createEmailPasswordSession) {
-      session = await appwrite.account.createEmailPasswordSession(email, password);
-    } else if (appwrite.account.createEmailSession) {
-      session = await appwrite.account.createEmailSession(email, password);
-    }
-
-    const user = await appwrite.account.get();
-    this.currentUser = user;
+    this.currentUser = {
+      $id: userCredential.user.uid,
+      name: userCredential.user.displayName || userCredential.user.email?.split('@')[0] || 'Utilisateur',
+      email: userCredential.user.email,
+      isAnonymous: false
+    };
     this.isGuest = false;
-    await db.setSetting('current_user_id', user.$id);
+    await db.setSetting('current_user_id', userCredential.user.uid);
 
     eventBus.emit('auth:change', { user: this.currentUser, isGuest: false });
     eventBus.emit('sync:trigger');
 
-    return user;
+    return this.currentUser;
   }
 
   /**
    * Logout
    */
   async logout() {
-    if (appwrite.isConfigured && !this.isGuest) {
+    if (firebase.isConfigured && !this.isGuest && firebase.auth) {
       try {
-        await appwrite.account.deleteSession('current');
+        const { signOut } = firebase.SDK.auth;
+        await signOut(firebase.auth);
       } catch (err) {
         console.warn('[Auth] Erreur de déconnexion distante :', err);
       }

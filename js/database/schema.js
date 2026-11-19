@@ -1,6 +1,6 @@
 /**
  * KEEP MASTER PRO - Data Schemas and Factories
- * Conforms to Appwrite TablesDB and IndexedDB data contracts.
+ * Conforms to Cloud Firestore and IndexedDB data contracts.
  */
 
 import { generateId } from '../utils/helpers.js';

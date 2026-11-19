@@ -11,7 +11,7 @@ export class ConflictManager {
   /**
    * Resolve conflict between local note and remote note
    * @param {Object} localNote - Current note in IndexedDB
-   * @param {Object} remoteNote - Incoming note from Appwrite
+   * @param {Object} remoteNote - Incoming note from Cloud Firestore
    * @returns {Object} { resolvedNote, conflictCopy }
    */
   static resolve(localNote, remoteNote) {

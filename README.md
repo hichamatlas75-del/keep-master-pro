@@ -1,6 +1,6 @@
 # KEEP MASTER PRO 📝⚡
 
-> Application de notes moderne, ultra-rapide, élégante et résiliente, inspirée de Google Keep, conçue exclusivement en PWA (Progressive Web App) Vanilla JavaScript ES Modules avec Appwrite Cloud et IndexedDB.
+> Application de notes moderne, ultra-rapide, élégante et résiliente, inspirée de Google Keep, conçue exclusivement en PWA (Progressive Web App) Vanilla JavaScript ES Modules avec Google Firebase (Cloud Firestore & Authentication) et IndexedDB.
 
 ---
 
@@ -9,8 +9,13 @@
 - **Architecture Exclusive :** PWA installable sur Android, iOS (iPhone/iPad), Windows, macOS et tous navigateurs modernes.
 - **Zéro Framework Lourd :** 100% Vanilla JavaScript ES Modules natifs, HTML5 sémantique, CSS3 moderne (Variables de design, Flexbox, Masonry CSS).
 - **Mode Hors-Ligne Absolu (Offline-First) :** L'application fonctionne immédiatement en local via **IndexedDB**, sans dépendre d'une connexion réseau ou d'une configuration backend préalable.
-- **Backend & Synchronisation :** **Appwrite Cloud** (TablesDB/Databases, Account, Storage, Realtime) avec file d'attente de synchronisation et moteur de résolution de conflits par versionnage et horodatage.
-- **Sauvegarde Indépendante :** Export et Import JSON complet avec validation de schéma, détection des doublons et stratégie de fusion.
+- **Backend Officiel :** **Firebase Cloud Firestore & Authentication** (Forfait gratuit **Spark** sans carte bancaire requise).
+- **Optimisation des Quotas Spark :**
+  - Synchronisation différentielle ("Delta Sync") basée sur les horodatages `updatedAt` pour éliminer les lectures répétitives.
+  - Écritures groupées atomiques (`writeBatch`) pour minimiser les requêtes.
+  - Prévention stricte des boucles de synchronisation via détection de `hasPendingWrites`.
+- **Stockage Local des Médias :** Images, dessins et enregistrements audio stockés localement en IndexedDB (DataURLs / Blobs) et intégrés dans les sauvegardes JSON sans surcoût de stockage externe.
+- **Sauvegarde Indépendante :** Export et Import JSON complet avec validation de schéma, détection des doublons et rapport d'importation détaillé.
 
 ---
 
@@ -49,7 +54,7 @@
 - Enregistrement audio via l'API Web `MediaRecorder`.
 - Indicateur visuel et chronomètre en direct.
 - Lecteur audio intégré directement dans la carte de note.
-- Stockage local immédiat (Blob IndexedDB) et synchronisation distante (Appwrite Storage).
+- Stockage local immédiat (Blob IndexedDB) et export JSON inclus.
 
 ### 7. Rappels & Notifications
 - Programmation de rappels avec date, heure et récurrence (Quotidien, Hebdomadaire).
@@ -67,8 +72,9 @@
 ```
 KEEP MASTER PRO/
 ├── .gitignore
-├── .env.example              # Gabarit des identifiants publics Appwrite
+├── .env.example              # Gabarit des identifiants publics Firebase
 ├── _headers                  # Règles de cache et sécurité Cloudflare Pages
+├── firestore.rules           # Règles de sécurité Cloud Firestore
 ├── package.json              # Scripts npm (serve, test, icons)
 ├── index.html                # Point d'entrée de l'application PWA
 ├── manifest.json             # Manifeste PWA installable
@@ -89,22 +95,22 @@ KEEP MASTER PRO/
 │   │   ├── sanitize.js       # Protection XSS et validateurs
 │   │   └── notifications.js  # Notifications & Rappels
 │   ├── database/
-│   │   ├── schema.js         # Modèles de données conformes Appwrite
+│   │   ├── schema.js         # Modèles de données
 │   │   ├── indexeddb.js      # Moteur local de persistance offline
 │   │   └── backup.js         # Moteur Export/Import JSON
 │   ├── services/
-│   │   ├── appwrite.js       # Client SDK Appwrite Cloud
-│   │   ├── auth.js           # Gestion des comptes et sessions
-│   │   └── storage.js        # Gestion des fichiers et blobs
+│   │   ├── firebase.js       # Client SDK Firebase Web modulaire
+│   │   ├── auth.js           # Gestion des comptes Firebase Auth
+│   │   └── storage.js        # Gestion des pièces jointes et blobs locaux
 │   ├── sync/
 │   │   ├── sync-queue.js     # File d'attente IndexedDB persistante
 │   │   ├── conflict-manager.js # Résolution des conflits par version
-│   │   └── sync-engine.js    # Synchronisation bidirectionnelle Realtime
+│   │   └── sync-engine.js    # Synchronisation bidirectionnelle Firestore
 │   ├── modules/              # Modules métier (notes, checklist, labels...)
 │   └── components/           # Composants d'interface utilisateur
 ├── scripts/
 │   ├── serve.js              # Serveur statique de développement local
-│   ├── setup-appwrite.js     # Script de provisionnement automatisé
+│   ├── setup-firebase.js     # Guide de configuration Firebase Spark
 │   └── generate-icons.js     # Générateur d'icônes PWA
 └── tests/                    # Tests unitaires automatisés Node.js
 ```
@@ -130,50 +136,46 @@ npm test
 
 ---
 
-## ☁️ Guide de Configuration Appwrite Cloud
+## 🔥 Guide de Configuration Firebase Cloud (Forfait Spark Gratuit)
 
-L'application fonctionne immédiatement en local sans configuration requise. Pour activer la synchronisation multi-appareils :
+L'application fonctionne immédiatement en local sans configuration requise. Pour activer la synchronisation multi-appareils avec votre compte **`hichamprojets@gmail.com`** :
 
-### Étape 1 : Créer le projet sur Appwrite Cloud
-1. Rendez-vous sur [https://cloud.appwrite.io](https://cloud.appwrite.io).
-2. Créez un compte gratuit et cliquez sur **"Create project"**.
-3. Nommez votre projet : `KEEP MASTER PRO`.
-4. Choisissez l'identifiant du projet : `keep-master-pro`.
+### Étape 1 : Créer le projet sur la Console Firebase
+1. Rendez-vous sur [https://console.firebase.google.com/](https://console.firebase.google.com/).
+2. Connectez-vous avec `hichamprojets@gmail.com`.
+3. Cliquez sur **"Ajouter un projet"**.
+4. Nommez le projet : `KEEP MASTER PRO`.
+5. Désactivez Google Analytics (recommandé pour la simplicité du forfait gratuit).
+6. Cliquez sur **"Créer le projet"**.
+7. Vérifiez que le projet est bien sur le forfait **Spark** (100% gratuit).
 
-### Étape 2 : Déclarer la plateforme Web
-1. Dans l'accueil de votre projet, cliquez sur **"Web App"** (icône HTML5).
-2. Nom : `Keep Master Pro Web`.
-3. Hostname : `localhost` pour le développement local, et `*.pages.dev` (ou votre domaine personnalisé) pour la production.
+### Étape 2 : Enregistrer l'application Web
+1. Sur l'accueil du projet, cliquez sur l'icône Web **`</>`**.
+2. Surnom de l'application : `Keep Master Web`.
+3. Cliquez sur **"Enregistrer l'application"**.
+4. Copiez les clés de l'objet `firebaseConfig` (`apiKey`, `authDomain`, `projectId`, `appId`).
 
-### Étape 3 : Créer la Base de Données
-1. Dans le menu de gauche, cliquez sur **Databases**.
-2. Cliquez sur **"Create database"** :
-   - Nom : `KEEP MASTER PRO Database`
-   - Database ID : `keep_master_db`
+### Étape 3 : Activer Firebase Authentication
+1. Dans le menu de gauche, allez dans **Build** -> **Authentication**.
+2. Cliquez sur **"Commencer"**.
+3. Dans l'onglet **"Modes de connexion"**, activez **"Adresse e-mail/Mot de passe"**.
 
-### Étape 4 : Créer les Collections
-Créez les 4 collections suivantes dans la base `keep_master_db` avec les permissions **"Users" (Create, Read, Update, Delete)** :
+### Étape 4 : Créer la Base Cloud Firestore
+1. Dans le menu de gauche, allez dans **Build** -> **Firestore Database**.
+2. Cliquez sur **"Créer une base de données"**.
+3. Choisissez l'emplacement le plus proche (ex: `europe-west1` ou `us-central1`).
+4. Choisissez **"Démarrer en mode production"** et validez.
 
-| Collection | ID | Attributs essentiels |
-|---|---|---|
-| **Notes** | `notes` | `userId` (string), `title` (string), `content` (string), `type` (string), `color` (string), `pinned` (boolean), `archived` (boolean), `trashed` (boolean), `checklist` (string), `labels` (string[]), `reminder` (string), `attachments` (string), `version` (integer), `createdAt` (datetime), `updatedAt` (datetime) |
-| **Labels** | `labels` | `userId` (string), `name` (string), `color` (string), `createdAt` (datetime) |
-| **Reminders** | `reminders` | `userId` (string), `noteId` (string), `date` (datetime), `completed` (boolean) |
-| **Shares** | `shares` | `noteId` (string), `ownerId` (string), `sharedWith` (string), `permission` (string), `createdAt` (datetime) |
+### Étape 5 : Déployer les Règles de Sécurité
+1. Ouvrez l'onglet **"Règles"** de Firestore.
+2. Copiez-collez le contenu du fichier `firestore.rules` de ce dépôt.
+3. Cliquez sur **"Publier"**.
 
-### Étape 5 : Créer le Bucket de Stockage
-1. Dans le menu de gauche, cliquez sur **Storage**.
-2. Cliquez sur **"Create bucket"** :
-   - Nom : `Keep Master Attachments`
-   - Bucket ID : `attachments`
-   - Permissions : **Users (Create, Read, Update, Delete)**
-   - Extensions autorisées : `png, jpg, jpeg, gif, webp, svg, webm, mp4, wav, mp3`.
-
-### Étape 6 : Connexion dans l'Application
-1. Dans KEEP MASTER PRO, ouvrez le menu **Paramètres** (icône d'engrenage en haut à droite).
-2. Entrez votre **Project ID** (`keep-master-pro`).
-3. Cliquez sur **"Tester la connexion"** puis **"Enregistrer"**.
-4. Cliquez sur l'icône de profil en haut à droite pour vous connecter ou créer votre compte.
+### Étape 6 : Connexion dans KEEP MASTER PRO
+1. Dans l'application, ouvrez les **Paramètres** (icône ⚙️ en haut à droite).
+2. Saisissez votre **API Key** et votre **Project ID**.
+3. Cliquez sur **"Enregistrer la configuration"** puis **"Tester la connexion"**.
+4. Ouvrez l'icône de profil pour vous inscrire ou vous connecter.
 
 ---
 
@@ -182,13 +184,6 @@ Créez les 4 collections suivantes dans la base `keep_master_db` avec les permis
 - **Sur Android (Chrome) :** Menu `⋮` -> "Installer l'application" ou "Ajouter à l'écran d'accueil".
 - **Sur iPhone / iPad (Safari) :** Bouton Partager -> "Sur l'écran d'accueil".
 - **Sur PC / Mac (Chrome, Edge) :** Bouton d'installation dans la barre d'adresse ou Menu `...` -> "Installer KEEP MASTER PRO".
-
----
-
-## 🔒 Sécurité & Bonnes Pratiques
-- **Zéro clé secrète dans le code client :** Seuls les identifiants publics autorisés par Appwrite (`Endpoint` et `Project ID`) sont exposés.
-- **Sanitisation HTML systématique :** Toutes les chaînes utilisateur passent par un filtre d'échappement pour bloquer toute injection XSS.
-- **Isolation des données :** Les permissions Appwrite sont configurées au niveau des utilisateurs authentifiés (`Role.user()`), garantissant l'étanchéité stricte des données privées.
 
 ---
 

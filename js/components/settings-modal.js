@@ -1,15 +1,14 @@
 /**
- * KEEP MASTER PRO - Settings, Backup & Appwrite Configuration Modal
- * Handles JSON Backup Export/Import, Appwrite Cloud configuration, sync controls and step-by-step guidance.
+ * KEEP MASTER PRO - Settings, Backup & Firebase Configuration Modal
+ * Handles JSON Backup Export/Import, Firebase Cloud configuration, sync controls and step-by-step guidance.
  */
 
-import { appwrite } from '../services/appwrite.js';
+import { firebase } from '../services/firebase.js';
 import { db } from '../database/indexeddb.js';
 import { BackupEngine } from '../database/backup.js';
 import { syncEngine } from '../sync/sync-engine.js';
 import { syncQueue } from '../sync/sync-queue.js';
 import { Toast } from './toast.js';
-import { Dialog } from './dialog.js';
 import { eventBus } from '../utils/event-bus.js';
 
 export class SettingsModal {
@@ -26,8 +25,7 @@ export class SettingsModal {
     const container = document.getElementById('modalsContainer');
     if (!container) return;
 
-    const currentEndpoint = await db.getSetting('appwrite_endpoint', appwrite.endpoint);
-    const currentProjectId = await db.getSetting('appwrite_project_id', appwrite.projectId);
+    const savedConfig = (await db.getSetting('firebase_config')) || firebase.config || {};
     const pendingCount = await syncQueue.count();
 
     this.modalEl = document.createElement('div');
@@ -41,29 +39,35 @@ export class SettingsModal {
         </div>
 
         <div class="modal-body" style="gap:20px;">
-          <!-- 1. Appwrite Cloud Configuration -->
+          <!-- 1. Firebase Cloud Configuration -->
           <section style="display:flex;flex-direction:column;gap:10px;">
             <div style="font-weight:600;font-size:15px;color:var(--text-primary);display:flex;align-items:center;gap:8px;">
-              <span>☁️</span> <span>Connexion Appwrite Cloud</span>
+              <span>🔥</span> <span>Connexion Firebase Cloud (Forfait Spark Gratuit)</span>
             </div>
             <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;">
-              Synchronisez vos notes en temps réel sur tous vos appareils via Appwrite Cloud.
+              Synchronisez vos notes en temps réel sur tous vos appareils via Google Cloud Firestore et Firebase Auth.
               (L'application reste 100% fonctionnelle hors-ligne en mode local).
             </p>
 
             <div style="display:flex;flex-direction:column;gap:8px;">
-              <label style="font-size:12px;font-weight:500;color:var(--text-secondary);">Endpoint API Appwrite :</label>
-              <input type="text" id="settingAppwriteEndpoint" value="${currentEndpoint}" placeholder="https://cloud.appwrite.io/v1" style="padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:13px;">
+              <label style="font-size:12px;font-weight:500;color:var(--text-secondary);">Firebase API Key :</label>
+              <input type="text" id="settingFirebaseApiKey" value="${savedConfig.API_KEY || ''}" placeholder="AIzaSy..." style="padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:13px;">
 
-              <label style="font-size:12px;font-weight:500;color:var(--text-secondary);">Project ID Appwrite :</label>
-              <input type="text" id="settingAppwriteProjectId" value="${currentProjectId}" placeholder="keep-master-pro" style="padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:13px;">
+              <label style="font-size:12px;font-weight:500;color:var(--text-secondary);">Project ID :</label>
+              <input type="text" id="settingFirebaseProjectId" value="${savedConfig.PROJECT_ID || 'keep-master-pro'}" placeholder="keep-master-pro" style="padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:13px;">
+
+              <label style="font-size:12px;font-weight:500;color:var(--text-secondary);">Auth Domain :</label>
+              <input type="text" id="settingFirebaseAuthDomain" value="${savedConfig.AUTH_DOMAIN || 'keep-master-pro.firebaseapp.com'}" placeholder="keep-master-pro.firebaseapp.com" style="padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:13px;">
+
+              <label style="font-size:12px;font-weight:500;color:var(--text-secondary);">App ID :</label>
+              <input type="text" id="settingFirebaseAppId" value="${savedConfig.APP_ID || ''}" placeholder="1:123456789012:web:abcdef..." style="padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:13px;">
             </div>
 
             <div style="display:flex;gap:8px;margin-top:4px;">
-              <button id="saveAppwriteConfigBtn" class="btn-primary" style="font-size:13px;">Enregistrer la configuration</button>
-              <button id="testAppwritePingBtn" class="btn-secondary" style="font-size:13px;">Tester la connexion</button>
+              <button id="saveFirebaseConfigBtn" class="btn-primary" style="font-size:13px;">Enregistrer la configuration</button>
+              <button id="testFirebasePingBtn" class="btn-secondary" style="font-size:13px;">Tester la connexion</button>
             </div>
-            <div id="appwritePingResult" style="font-size:12px;font-weight:500;"></div>
+            <div id="firebasePingResult" style="font-size:12px;font-weight:500;"></div>
           </section>
 
           <hr style="border:none;border-top:1px solid var(--border-color);">
@@ -117,30 +121,35 @@ export class SettingsModal {
 
     container.appendChild(this.modalEl);
 
-    // Save Appwrite Config
-    const endpointInput = this.modalEl.querySelector('#settingAppwriteEndpoint');
-    const projectInput = this.modalEl.querySelector('#settingAppwriteProjectId');
-    const pingResult = this.modalEl.querySelector('#appwritePingResult');
+    // Save Firebase Config
+    const apiKeyInput = this.modalEl.querySelector('#settingFirebaseApiKey');
+    const projectInput = this.modalEl.querySelector('#settingFirebaseProjectId');
+    const authDomainInput = this.modalEl.querySelector('#settingFirebaseAuthDomain');
+    const appIdInput = this.modalEl.querySelector('#settingFirebaseAppId');
+    const pingResult = this.modalEl.querySelector('#firebasePingResult');
 
-    this.modalEl.querySelector('#saveAppwriteConfigBtn').onclick = async () => {
-      const endpoint = endpointInput.value.trim();
-      const projectId = projectInput.value.trim();
-      await appwrite.updateConfig(endpoint, projectId);
-      Toast.show('Configuration Appwrite enregistrée');
+    this.modalEl.querySelector('#saveFirebaseConfigBtn').onclick = async () => {
+      await firebase.updateConfig({
+        API_KEY: apiKeyInput.value.trim(),
+        PROJECT_ID: projectInput.value.trim(),
+        AUTH_DOMAIN: authDomainInput.value.trim(),
+        APP_ID: appIdInput.value.trim()
+      });
+      Toast.show('Configuration Firebase enregistrée');
       syncEngine.syncNow();
     };
 
     // Test Ping
-    this.modalEl.querySelector('#testAppwritePingBtn').onclick = async () => {
+    this.modalEl.querySelector('#testFirebasePingBtn').onclick = async () => {
       pingResult.style.color = 'var(--text-secondary)';
       pingResult.textContent = 'Test en cours...';
-      const ok = await appwrite.ping();
+      const ok = await firebase.ping();
       if (ok) {
         pingResult.style.color = 'var(--success-color)';
-        pingResult.textContent = '✅ Connexion à Appwrite Cloud établie avec succès !';
+        pingResult.textContent = '✅ Connexion à Firebase Firestore établie avec succès !';
       } else {
         pingResult.style.color = 'var(--danger-color)';
-        pingResult.textContent = '⚠️ Serveur Appwrite inaccessible ou Project ID inexistant.';
+        pingResult.textContent = '⚠️ Firestore inaccessible. Vérifiez vos identifiants ou votre connexion.';
       }
     };
 

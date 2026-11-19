@@ -7,7 +7,7 @@ describe('Search & Filter Engine Tests', () => {
     {
       $id: 'n1',
       title: 'Réunion Projet Keep',
-      content: 'Discuter de la roadmap PWA et Appwrite',
+      content: 'Discuter de la roadmap PWA et Firebase',
       color: 'coral',
       type: 'text',
       pinned: true,

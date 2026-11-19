@@ -1,10 +1,10 @@
 /**
  * KEEP MASTER PRO - Authentication Modal Component
- * Appwrite user registration, sign in, account profile, and guest mode.
+ * Firebase user registration, sign in, account profile, and guest mode.
  */
 
 import { auth } from '../services/auth.js';
-import { appwrite } from '../services/appwrite.js';
+import { firebase } from '../services/firebase.js';
 import { Toast } from './toast.js';
 import { eventBus } from '../utils/event-bus.js';
 
@@ -23,7 +23,6 @@ export class AuthModal {
     const container = document.getElementById('modalsContainer');
     if (!container) return;
 
-    const user = auth.getUser();
     this.mode = auth.isGuest ? 'login' : 'profile';
 
     this.modalEl = document.createElement('div');
@@ -71,13 +70,13 @@ export class AuthModal {
     this.modalEl.innerHTML = `
       <div class="modal-content" style="max-width: 440px;">
         <div class="modal-header">
-          <h3 class="modal-title">${isLogin ? 'Connexion Appwrite' : 'Créer un compte'}</h3>
+          <h3 class="modal-title">${isLogin ? 'Connexion Firebase' : 'Créer un compte'}</h3>
           <button id="closeAuthModalBtn" class="btn-icon">×</button>
         </div>
         <div class="modal-body" style="gap:14px;">
-          ${!appwrite.isConfigured ? `
+          ${!firebase.isConfigured ? `
             <div style="background:var(--accent-subtle);color:var(--accent-text);padding:8px 12px;border-radius:6px;font-size:12px;">
-              ⚠️ Appwrite Cloud n'est pas encore configuré. Renseignez votre Project ID dans les Paramètres pour activer la synchronisation multi-appareils.
+              ℹ️ Firebase n'est pas encore configuré. Renseignez votre API Key et Project ID dans les Paramètres pour activer la synchronisation multi-appareils.
             </div>
           ` : ''}
 

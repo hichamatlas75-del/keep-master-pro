@@ -1,9 +1,13 @@
 /**
- * KEEP MASTER PRO - Bi-Directional Sync Engine
- * Realtime synchronization between IndexedDB and Appwrite Cloud.
+ * KEEP MASTER PRO - Bi-Directional Firestore Sync Engine
+ * Optimized for Firebase Spark Free Plan:
+ * - Batched writes (writeBatch) to minimize quota consumption
+ * - Delta synchronization using `updatedAt > lastSyncTime` to eliminate repetitive reads
+ * - Anti-loop mechanism via `snapshot.metadata.hasPendingWrites`
+ * - Offline-first resilience with IndexedDB as primary store
  */
 
-import { appwrite } from '../services/appwrite.js';
+import { firebase } from '../services/firebase.js';
 import { auth } from '../services/auth.js';
 import { db } from '../database/indexeddb.js';
 import { syncQueue } from './sync-queue.js';
@@ -18,6 +22,7 @@ class SyncEngine {
     this.realtimeUnsubscribe = null;
     this.syncInterval = null;
     this.status = APP_CONFIG.SYNC_STATUS.ONLINE;
+    this.recentLocalWrites = new Map(); // docId -> timestamp
   }
 
   /**
@@ -26,7 +31,7 @@ class SyncEngine {
   async init() {
     this.updateStatus();
 
-    // Listen to browser network changes
+    // Listen to browser network state
     window.addEventListener('online', () => {
       console.log('[SyncEngine] Connexion réseau rétablie.');
       this.updateStatus();
@@ -34,16 +39,17 @@ class SyncEngine {
     });
 
     window.addEventListener('offline', () => {
-      console.log('[SyncEngine] Connexion réseau perdue. Passage en mode 100% hors-ligne.');
+      console.log('[SyncEngine] Connexion réseau perdue. Mode 100% hors-ligne.');
       this.setStatus(APP_CONFIG.SYNC_STATUS.OFFLINE, 'Hors ligne');
+      this.unsubscribeRealtime();
     });
 
-    // Listen to manual sync trigger requests
+    // Listen to manual sync triggers
     eventBus.on('sync:trigger', () => this.syncNow());
 
     // Listen to auth changes
     eventBus.on('auth:change', ({ isGuest }) => {
-      if (!isGuest) {
+      if (!isGuest && firebase.isConfigured) {
         this.subscribeRealtime();
         this.syncNow();
       } else {
@@ -51,14 +57,14 @@ class SyncEngine {
       }
     });
 
-    // Background periodic sync every 30 seconds if online
+    // Background sync check every 45 seconds (optimized for Spark quota)
     this.syncInterval = setInterval(() => {
-      if (navigator.onLine && !this.isSyncing && !auth.isGuest && appwrite.isConfigured) {
+      if (navigator.onLine && !this.isSyncing && !auth.isGuest && firebase.isConfigured) {
         this.syncNow();
       }
-    }, 30000);
+    }, 45000);
 
-    // Initial sync
+    // Initial sync check
     setTimeout(() => this.syncNow(), 1500);
   }
 
@@ -87,7 +93,7 @@ class SyncEngine {
       return;
     }
 
-    if (auth.isGuest || !appwrite.isConfigured || !appwrite.databases) {
+    if (auth.isGuest || !firebase.isConfigured || !firebase.firestore) {
       this.setStatus(APP_CONFIG.SYNC_STATUS.ONLINE, 'Mode local');
       return;
     }
@@ -96,10 +102,10 @@ class SyncEngine {
     this.setStatus(APP_CONFIG.SYNC_STATUS.SYNCING, 'Synchronisation...');
 
     try {
-      // 1. Push pending local operations to Appwrite
+      // 1. Push pending local operations to Firestore via batched writes
       await this.processSyncQueue();
 
-      // 2. Pull remote changes from Appwrite
+      // 2. Pull remote changes with delta optimization
       await this.pullRemoteNotes();
       await this.pullRemoteLabels();
 
@@ -110,7 +116,7 @@ class SyncEngine {
         this.setStatus(APP_CONFIG.SYNC_STATUS.ONLINE, 'Synchronisé');
       }
     } catch (err) {
-      console.warn('[SyncEngine] Avertissement lors de la synchronisation :', err.message);
+      console.warn('[SyncEngine] Avertissement synchronisation Firestore :', err.message);
       this.setStatus(APP_CONFIG.SYNC_STATUS.ONLINE, 'Mode hors-ligne actif');
     } finally {
       this.isSyncing = false;
@@ -118,168 +124,96 @@ class SyncEngine {
   }
 
   /**
-   * Process and push queued operations to Appwrite
+   * Process pending sync queue using Firestore writeBatch (Quota & performance optimization)
    */
   async processSyncQueue() {
-    const operations = await syncQueue.getPendingOperations(50);
+    const operations = await syncQueue.getPendingOperations(40);
     if (!operations || operations.length === 0) return;
 
-    const dbId = APP_CONFIG.APPWRITE.DATABASE_ID;
-    const notesColl = APP_CONFIG.APPWRITE.COLLECTIONS.NOTES;
-    const labelsColl = APP_CONFIG.APPWRITE.COLLECTIONS.LABELS;
+    const { doc, writeBatch } = firebase.SDK.firestore;
+    const batch = writeBatch(firebase.firestore);
+    const opsToDequeue = [];
 
     for (const op of operations) {
       try {
-        if (op.collection === 'notes') {
-          if (op.action === 'CREATE') {
-            await this.pushCreateNote(dbId, notesColl, op.data);
-          } else if (op.action === 'UPDATE') {
-            await this.pushUpdateNote(dbId, notesColl, op.documentId, op.data);
-          } else if (op.action === 'DELETE') {
-            await this.pushDeleteNote(dbId, notesColl, op.documentId);
-          }
-        } else if (op.collection === 'labels') {
-          if (op.action === 'CREATE' || op.action === 'UPDATE') {
-            await this.pushSaveLabel(dbId, labelsColl, op.data);
-          } else if (op.action === 'DELETE') {
-            await this.pushDeleteLabel(dbId, labelsColl, op.documentId);
-          }
+        const docRef = doc(firebase.firestore, op.collection, op.documentId);
+
+        if (op.action === 'CREATE' || op.action === 'UPDATE') {
+          const payload = this.formatPayloadForFirestore(op.data);
+          batch.set(docRef, payload, { merge: true });
+          this.recentLocalWrites.set(op.documentId, Date.now());
+        } else if (op.action === 'DELETE') {
+          batch.delete(docRef);
         }
 
-        // Successfully synchronized: remove from queue
-        await syncQueue.remove(op.id);
+        opsToDequeue.push(op.id);
       } catch (err) {
-        console.warn(`[SyncEngine] Erreur pour l'opération ${op.action} (${op.documentId}):`, err.message);
-        // If document already exists on create or not found on delete, safely dequeue
-        if (err.code === 409 || err.code === 404) {
-          await syncQueue.remove(op.id);
-        }
-        break; // Stop loop and retry on next pass to preserve order
+        console.warn(`[SyncEngine] Erreur préparation batch pour ${op.documentId}:`, err);
+      }
+    }
+
+    if (opsToDequeue.length > 0) {
+      // Commit all batched operations in a single Firestore call!
+      await batch.commit();
+
+      // Dequeue all successful operations
+      for (const opId of opsToDequeue) {
+        await syncQueue.remove(opId);
       }
     }
   }
 
   /**
-   * Prepare note document for Appwrite TablesDB
+   * Format note data for Firestore
    */
-  formatNoteForAppwrite(note) {
-    return {
-      userId: auth.getUserId(),
-      title: note.title || '',
-      content: note.content || '',
-      type: note.type || 'text',
-      color: note.color || 'default',
-      pinned: Boolean(note.pinned),
-      archived: Boolean(note.archived),
-      trashed: Boolean(note.trashed),
-      checklist: JSON.stringify(note.checklist || []),
-      labels: note.labels || [],
-      reminder: JSON.stringify(note.reminder || null),
-      attachments: JSON.stringify(note.attachments || []),
-      version: Number(note.version) || 1,
-      createdAt: note.createdAt,
-      updatedAt: note.updatedAt,
-      deletedAt: note.deletedAt || null
-    };
+  formatPayloadForFirestore(data) {
+    if (!data) return {};
+    const payload = { ...data };
+    payload.userId = auth.getUserId();
+    payload.updatedAt = payload.updatedAt || new Date().toISOString();
+    return payload;
   }
 
   /**
-   * Parse note document from Appwrite
-   */
-  parseNoteFromAppwrite(doc) {
-    let checklist = [];
-    let reminder = null;
-    let attachments = [];
-
-    try {
-      checklist = typeof doc.checklist === 'string' ? JSON.parse(doc.checklist) : (doc.checklist || []);
-    } catch (e) {}
-
-    try {
-      reminder = typeof doc.reminder === 'string' ? JSON.parse(doc.reminder) : (doc.reminder || null);
-    } catch (e) {}
-
-    try {
-      attachments = typeof doc.attachments === 'string' ? JSON.parse(doc.attachments) : (doc.attachments || []);
-    } catch (e) {}
-
-    return createNoteModel({
-      $id: doc.$id,
-      userId: doc.userId,
-      title: doc.title,
-      content: doc.content,
-      type: doc.type,
-      color: doc.color,
-      pinned: doc.pinned,
-      archived: doc.archived,
-      trashed: doc.trashed,
-      checklist,
-      labels: doc.labels || [],
-      reminder,
-      attachments,
-      version: doc.version,
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
-      deletedAt: doc.deletedAt
-    });
-  }
-
-  async pushCreateNote(dbId, collId, note) {
-    const formatted = this.formatNoteForAppwrite(note);
-    await appwrite.databases.createDocument(dbId, collId, note.$id, formatted);
-  }
-
-  async pushUpdateNote(dbId, collId, docId, note) {
-    const formatted = this.formatNoteForAppwrite(note);
-    await appwrite.databases.updateDocument(dbId, collId, docId, formatted);
-  }
-
-  async pushDeleteNote(dbId, collId, docId) {
-    await appwrite.databases.deleteDocument(dbId, collId, docId);
-  }
-
-  async pushSaveLabel(dbId, collId, label) {
-    try {
-      await appwrite.databases.createDocument(dbId, collId, label.$id, {
-        userId: auth.getUserId(),
-        name: label.name,
-        color: label.color || 'default',
-        createdAt: label.createdAt
-      });
-    } catch (err) {
-      if (err.code === 409) {
-        await appwrite.databases.updateDocument(dbId, collId, label.$id, {
-          name: label.name,
-          color: label.color || 'default'
-        });
-      } else {
-        throw err;
-      }
-    }
-  }
-
-  async pushDeleteLabel(dbId, collId, docId) {
-    await appwrite.databases.deleteDocument(dbId, collId, docId);
-  }
-
-  /**
-   * Pull remote notes from Appwrite
+   * Delta sync for remote notes (Queries only documents modified since lastSyncTime)
    */
   async pullRemoteNotes() {
-    const dbId = APP_CONFIG.APPWRITE.DATABASE_ID;
-    const collId = APP_CONFIG.APPWRITE.COLLECTIONS.NOTES;
-    const { Query } = appwrite.SDK;
+    const { collection, query, where, getDocs, limit } = firebase.SDK.firestore;
+    const notesCol = collection(firebase.firestore, 'notes');
+    const uid = auth.getUserId();
 
-    const response = await appwrite.databases.listDocuments(dbId, collId, [
-      Query.equal('userId', auth.getUserId()),
-      Query.limit(100)
-    ]);
+    const lastSyncTime = await db.getSetting(`last_sync_notes_${uid}`, '1970-01-01T00:00:00.000Z');
 
+    // Query only notes for current user updated after lastSyncTime (Spark plan optimization)
+    const q = query(
+      notesCol,
+      where('userId', '==', uid),
+      where('updatedAt', '>', lastSyncTime),
+      limit(50)
+    );
+
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return;
+
+    let maxUpdated = lastSyncTime;
     let hasChanges = false;
-    for (const doc of response.documents) {
-      const remoteNote = this.parseNoteFromAppwrite(doc);
-      const localNote = await db.getNote(remoteNote.$id);
 
+    for (const docSnap of snapshot.docs) {
+      const remoteData = docSnap.data();
+      remoteData.$id = docSnap.id;
+      const remoteNote = createNoteModel(remoteData);
+
+      if (remoteNote.updatedAt > maxUpdated) {
+        maxUpdated = remoteNote.updatedAt;
+      }
+
+      // Check if this was a recent local write by this device to avoid self-echoes
+      const localWriteTime = this.recentLocalWrites.get(remoteNote.$id);
+      if (localWriteTime && (Date.now() - localWriteTime) < 10000) {
+        continue;
+      }
+
+      const localNote = await db.getNote(remoteNote.$id);
       const { resolvedNote, conflictCopy } = ConflictManager.resolve(localNote, remoteNote);
 
       if (conflictCopy) {
@@ -297,34 +231,31 @@ class SyncEngine {
       }
     }
 
+    await db.setSetting(`last_sync_notes_${uid}`, maxUpdated);
+
     if (hasChanges) {
-      eventBus.emit('notes:changed', { action: 'pull' });
+      eventBus.emit('notes:changed', { action: 'firestore-pull' });
     }
   }
 
   /**
-   * Pull remote labels from Appwrite
+   * Delta sync for remote labels
    */
   async pullRemoteLabels() {
-    const dbId = APP_CONFIG.APPWRITE.DATABASE_ID;
-    const collId = APP_CONFIG.APPWRITE.COLLECTIONS.LABELS;
-    const { Query } = appwrite.SDK;
+    const { collection, query, where, getDocs, limit } = firebase.SDK.firestore;
+    const labelsCol = collection(firebase.firestore, 'labels');
+    const uid = auth.getUserId();
 
-    const response = await appwrite.databases.listDocuments(dbId, collId, [
-      Query.equal('userId', auth.getUserId()),
-      Query.limit(100)
-    ]);
+    const q = query(labelsCol, where('userId', '==', uid), limit(50));
+    const snapshot = await getDocs(q);
 
     let hasChanges = false;
-    for (const doc of response.documents) {
-      const label = createLabelModel({
-        $id: doc.$id,
-        userId: doc.userId,
-        name: doc.name,
-        color: doc.color,
-        createdAt: doc.createdAt
+    for (const docSnap of snapshot.docs) {
+      const remoteLabel = createLabelModel({
+        $id: docSnap.id,
+        ...docSnap.data()
       });
-      await db.saveLabel(label);
+      await db.saveLabel(remoteLabel);
       hasChanges = true;
     }
 
@@ -334,35 +265,47 @@ class SyncEngine {
   }
 
   /**
-   * Appwrite Realtime Subscriptions
+   * Attach Firestore Realtime onSnapshot listener (only when logged in)
    */
   subscribeRealtime() {
-    if (!appwrite.isConfigured || !appwrite.client) return;
+    if (!firebase.isConfigured || !firebase.firestore) return;
     this.unsubscribeRealtime();
 
-    const dbId = APP_CONFIG.APPWRITE.DATABASE_ID;
-    const notesColl = APP_CONFIG.APPWRITE.COLLECTIONS.NOTES;
-    const channel = `databases.${dbId}.collections.${notesColl}.documents`;
+    const { collection, query, where, onSnapshot } = firebase.SDK.firestore;
+    const uid = auth.getUserId();
+    const q = query(collection(firebase.firestore, 'notes'), where('userId', '==', uid));
 
     try {
-      this.realtimeUnsubscribe = appwrite.client.subscribe(channel, (response) => {
-        const event = response.events[0];
-        const payload = response.payload;
-
-        if (event.includes('.create') || event.includes('.update')) {
-          const remoteNote = this.parseNoteFromAppwrite(payload);
-          db.saveNote(remoteNote).then(() => {
-            eventBus.emit('notes:changed', { action: 'realtime-update' });
-          });
-        } else if (event.includes('.delete')) {
-          db.deleteNote(payload.$id).then(() => {
-            eventBus.emit('notes:changed', { action: 'realtime-delete' });
-          });
+      this.realtimeUnsubscribe = onSnapshot(q, (snapshot) => {
+        // Prevent sync loops: ignore pending local writes!
+        if (snapshot.metadata.hasPendingWrites) {
+          return;
         }
+
+        snapshot.docChanges().forEach(async (change) => {
+          const docData = change.doc.data();
+          docData.$id = change.doc.id;
+
+          if (change.type === 'added' || change.type === 'modified') {
+            const remoteNote = createNoteModel(docData);
+            const localNote = await db.getNote(remoteNote.$id);
+
+            if (!localNote || localNote.updatedAt < remoteNote.updatedAt) {
+              await db.saveNote(remoteNote);
+              eventBus.emit('notes:changed', { action: 'realtime-update' });
+            }
+          } else if (change.type === 'removed') {
+            await db.deleteNote(docData.$id);
+            eventBus.emit('notes:changed', { action: 'realtime-delete' });
+          }
+        });
+      }, (err) => {
+        console.warn('[SyncEngine] Realtime Firestore arrêté :', err.message);
       });
-      console.log('[SyncEngine] Abonnement Realtime Appwrite actif.');
+
+      console.log('[SyncEngine] Écouteur temps réel Firestore actif.');
     } catch (err) {
-      console.warn('[SyncEngine] Realtime non disponible :', err.message);
+      console.warn('[SyncEngine] Impossible d\'activer le temps réel Firestore :', err.message);
     }
   }
 

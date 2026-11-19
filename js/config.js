@@ -1,12 +1,13 @@
 /**
  * KEEP MASTER PRO - Global Configuration & Constants
+ * Firebase Cloud & IndexedDB Offline-First
  */
 
 export const APP_CONFIG = {
   APP_NAME: 'KEEP MASTER PRO',
-  VERSION: '1.0.0',
+  VERSION: '1.1.0',
 
-  // IndexedDB Configuration
+  // IndexedDB Configuration (Local Primary Store)
   DB_NAME: 'KeepMasterProDB',
   DB_VERSION: 1,
   STORES: {
@@ -19,18 +20,20 @@ export const APP_CONFIG = {
     MEDIA_BLOBS: 'media_blobs'
   },
 
-  // Appwrite Defaults (Configurable via Settings UI or environment)
-  APPWRITE: {
-    ENDPOINT: 'https://cloud.appwrite.io/v1',
+  // Firebase Configuration Defaults (Configurable via Settings UI or environment)
+  FIREBASE: {
+    API_KEY: '',
+    AUTH_DOMAIN: 'keep-master-pro.firebaseapp.com',
     PROJECT_ID: 'keep-master-pro',
-    DATABASE_ID: 'keep_master_db',
+    STORAGE_BUCKET: 'keep-master-pro.appspot.com',
+    MESSAGING_SENDER_ID: '',
+    APP_ID: '',
     COLLECTIONS: {
       NOTES: 'notes',
       LABELS: 'labels',
       REMINDERS: 'reminders',
       SHARES: 'shares'
-    },
-    STORAGE_BUCKET_ID: 'attachments'
+    }
   },
 
   // 10 Note Colors matching Keep Aesthetics

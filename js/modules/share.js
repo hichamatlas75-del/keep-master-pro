@@ -1,10 +1,9 @@
 /**
  * KEEP MASTER PRO - Sharing & Collaboration Module
- * Web Share API, clipboard fallback, and Appwrite permissions sharing.
+ * Web Share API, clipboard fallback, and Firebase/Firestore permissions sharing.
  */
 
 import { auth } from '../services/auth.js';
-import { appwrite } from '../services/appwrite.js';
 import { db } from '../database/indexeddb.js';
 import { syncQueue } from '../sync/sync-queue.js';
 import { createShareModel } from '../database/schema.js';
@@ -50,7 +49,7 @@ export class ShareModule {
   }
 
   /**
-   * Create an Appwrite collaboration share record
+   * Create a collaboration share record
    */
   static async shareWithUser(noteId, targetUserIdOrEmail, permission = 'read') {
     const share = createShareModel({
@@ -65,7 +64,7 @@ export class ShareModule {
     const tx = rawDb.transaction([APP_CONFIG.STORES.SHARES], 'readwrite');
     tx.objectStore(APP_CONFIG.STORES.SHARES).put(share);
 
-    // Queue for Appwrite sync
+    // Queue for Cloud Firestore sync
     await syncQueue.enqueue('shares', 'CREATE', share.$id, share);
 
     return share;

@@ -1,7 +1,7 @@
 {
   "name": "KEEP MASTER PRO",
   "short_name": "Keep Master",
-  "description": "Application de prise de notes moderne, rapide et hors-ligne inspirée de Google Keep, avec synchronisation Appwrite.",
+  "description": "Application de prise de notes moderne, rapide et hors-ligne inspirée de Google Keep, avec synchronisation Firebase.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -1,7 +1,7 @@
 {
   "name": "keep-master-pro",
   "version": "1.0.0",
-  "description": "Progressive Web App (PWA) de notes moderne, rapide et hors-ligne, inspirée de Google Keep, avec Appwrite Cloud et IndexedDB.",
+  "description": "Progressive Web App (PWA) de notes moderne, rapide et hors-ligne, inspirée de Google Keep, avec Firebase Cloud Firestore et IndexedDB.",
   "type": "module",
   "scripts": {
     "start": "node scripts/serve.js",
@@ -13,7 +13,8 @@
     "pwa",
     "google-keep",
     "notes",
-    "appwrite",
+    "firebase",
+    "firestore",
     "offline-first",
     "indexeddb",
     "vanilla-js"

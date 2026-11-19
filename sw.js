@@ -29,7 +29,7 @@ const STATIC_ASSETS = [
   './js/database/schema.js',
   './js/database/indexeddb.js',
   './js/database/backup.js',
-  './js/services/appwrite.js',
+  './js/services/firebase.js',
   './js/services/auth.js',
   './js/services/storage.js',
   './js/sync/conflict-manager.js',
@@ -95,8 +95,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Bypass Cache API for Appwrite API or websocket calls
-  if (url.origin.includes('appwrite') || url.pathname.includes('/v1/')) {
+  // Bypass Cache API for Firebase API, Firestore websockets, or Google APIs
+  if (
+    url.origin.includes('firebase') ||
+    url.origin.includes('googleapis') ||
+    url.origin.includes('firestore')
+  ) {
     return;
   }
 
