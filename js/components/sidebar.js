@@ -28,32 +28,53 @@ export class Sidebar {
   init() {
     // 1. Toggle button (hamburger)
     if (this.toggleBtn) {
-      this.toggleBtn.onclick = () => this.toggleSidebar();
+      this.toggleBtn.onclick = (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        this.toggleSidebar();
+      };
     }
 
     if (this.backdrop) {
-      this.backdrop.onclick = () => this.closeMobileDrawer();
+      this.backdrop.onclick = (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        this.closeMobileDrawer();
+      };
     }
 
     // 2. User account card click
     if (this.userCard) {
-      this.userCard.onclick = () => {
-        eventBus.emit('modal:auth');
+      this.userCard.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         this.closeMobileDrawer();
-      };
+        setTimeout(() => {
+          eventBus.emit('modal:auth');
+        }, 80);
+      });
     }
 
     // 3. Settings button in sidebar (mobile easy access)
     if (this.settingsBtn) {
-      this.settingsBtn.onclick = () => {
-        eventBus.emit('modal:settings');
+      this.settingsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         this.closeMobileDrawer();
-      };
+        setTimeout(() => {
+          eventBus.emit('modal:settings');
+        }, 80);
+      });
     }
 
     // 4. Static navigation items (Notes, Reminders, Archive, Trash)
     this.sidebar.querySelectorAll('.nav-item[data-view]').forEach(item => {
-      item.onclick = () => {
+      item.onclick = (e) => {
+        if (e) e.stopPropagation();
         const view = item.dataset.view;
         this.setView(view);
         this.closeMobileDrawer();
@@ -62,10 +83,14 @@ export class Sidebar {
 
     // 5. Edit labels button
     if (this.editLabelsBtn) {
-      this.editLabelsBtn.onclick = () => {
-        eventBus.emit('modal:labels');
+      this.editLabelsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         this.closeMobileDrawer();
-      };
+        setTimeout(() => {
+          eventBus.emit('modal:labels');
+        }, 80);
+      });
     }
 
     // 6. Listen to labels change and auth change

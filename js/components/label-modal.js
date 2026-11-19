@@ -20,6 +20,10 @@ export class LabelModal {
   }
 
   async open() {
+    if (this.modalEl) {
+      this.close();
+    }
+
     const container = document.getElementById('modalsContainer');
     if (!container) return;
 
@@ -132,10 +136,25 @@ export class LabelModal {
 
     this.modalEl.querySelector('#closeLabelModalBtn').onclick = close;
     this.modalEl.querySelector('#doneLabelModalBtn').onclick = close;
-    this.modalEl.onclick = (e) => {
-      if (e.target === this.modalEl) close();
-    };
+
+    let isMouseDownOnBackdrop = false;
+    this.modalEl.addEventListener('mousedown', (e) => {
+      isMouseDownOnBackdrop = (e.target === this.modalEl);
+    });
+    this.modalEl.addEventListener('click', (e) => {
+      if (e.target === this.modalEl && isMouseDownOnBackdrop) {
+        close();
+      }
+      isMouseDownOnBackdrop = false;
+    });
 
     refreshList();
+  }
+
+  close() {
+    if (this.modalEl) {
+      this.modalEl.remove();
+      this.modalEl = null;
+    }
   }
 }

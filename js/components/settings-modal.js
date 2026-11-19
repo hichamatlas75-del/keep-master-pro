@@ -22,6 +22,10 @@ export class SettingsModal {
   }
 
   async open() {
+    if (this.modalEl) {
+      this.close();
+    }
+
     const container = document.getElementById('modalsContainer');
     if (!container) return;
 
@@ -229,8 +233,23 @@ export class SettingsModal {
 
     this.modalEl.querySelector('#closeSettingsModalBtn').onclick = close;
     this.modalEl.querySelector('#closeSettingsBottomBtn').onclick = close;
-    this.modalEl.onclick = (e) => {
-      if (e.target === this.modalEl) close();
-    };
+
+    let isMouseDownOnBackdrop = false;
+    this.modalEl.addEventListener('mousedown', (e) => {
+      isMouseDownOnBackdrop = (e.target === this.modalEl);
+    });
+    this.modalEl.addEventListener('click', (e) => {
+      if (e.target === this.modalEl && isMouseDownOnBackdrop) {
+        close();
+      }
+      isMouseDownOnBackdrop = false;
+    });
+  }
+
+  close() {
+    if (this.modalEl) {
+      this.modalEl.remove();
+      this.modalEl = null;
+    }
   }
 }

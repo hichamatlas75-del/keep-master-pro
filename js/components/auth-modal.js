@@ -20,6 +20,10 @@ export class AuthModal {
   }
 
   open() {
+    if (this.modalEl) {
+      this.close();
+    }
+
     const container = document.getElementById('modalsContainer');
     if (!container) return;
 
@@ -30,6 +34,18 @@ export class AuthModal {
 
     this.renderContent();
     container.appendChild(this.modalEl);
+
+    // Dismiss on backdrop click only if mousedown also started on backdrop
+    let isMouseDownOnBackdrop = false;
+    this.modalEl.addEventListener('mousedown', (e) => {
+      isMouseDownOnBackdrop = (e.target === this.modalEl);
+    });
+    this.modalEl.addEventListener('click', (e) => {
+      if (e.target === this.modalEl && isMouseDownOnBackdrop) {
+        this.close();
+      }
+      isMouseDownOnBackdrop = false;
+    });
   }
 
   renderContent() {
@@ -166,10 +182,6 @@ export class AuthModal {
         submitBtn.disabled = false;
         submitBtn.textContent = isLogin ? 'Se connecter' : 'Créer le compte';
       }
-    };
-
-    this.modalEl.onclick = (e) => {
-      if (e.target === this.modalEl) this.close();
     };
   }
 
