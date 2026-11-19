@@ -3,7 +3,7 @@
  * Cache API, offline-first app shell, notifications & offline sync support.
  */
 
-const CACHE_NAME = 'keep-master-v1.0.0';
+const CACHE_NAME = 'keep-master-v1.1.0';
 
 // App shell assets to pre-cache
 const STATIC_ASSETS = [

@@ -157,6 +157,8 @@ export async function compressImage(fileOrBlob, maxWidth = 1280, maxHeight = 128
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, width, height);
       ctx.drawImage(img, 0, 0, width, height);
 
       canvas.toBlob(

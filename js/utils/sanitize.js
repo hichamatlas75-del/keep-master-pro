@@ -36,12 +36,12 @@ export function sanitizeTitle(title) {
 }
 
 /**
- * Sanitize URL to ensure it uses safe protocols (http, https, data for safe images, blob)
+ * Sanitize URL to ensure it uses safe protocols (http, https, data for safe images/audio, blob)
  */
 export function sanitizeUrl(url) {
   if (typeof url !== 'string') return '';
   const trimmed = url.trim();
-  const safeProtocolRegex = /^(https?:\/\/|data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,|blob:)/i;
+  const safeProtocolRegex = /^(https?:\/\/|data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,|data:audio\/(webm|mp4|mpeg|ogg|wav|aac|x-m4a|3gpp|flac)(?:;[a-z0-9=.,_-]+)*;base64,|blob:)/i;
   if (safeProtocolRegex.test(trimmed)) {
     return trimmed;
   }

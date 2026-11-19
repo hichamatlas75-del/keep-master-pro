@@ -91,4 +91,28 @@ describe('Search & Filter Engine Tests', () => {
     assert.equal(results.length, 1);
     assert.equal(results[0].$id, 'n3');
   });
+
+  test('search should filter by drawing type including attachment-based drawings', () => {
+    const mediaNotes = [
+      { $id: 'd1', title: 'Croquis type', content: '', type: 'drawing', attachments: [] },
+      { $id: 'd2', title: 'Croquis kind', content: '', type: 'text', attachments: [{ kind: 'drawing', type: 'image/png', name: 'sketch.png' }] },
+      { $id: 'd3', title: 'Croquis filename', content: '', type: 'text', attachments: [{ type: 'image/png', name: 'drawing-12345.png' }] },
+      { $id: 'd4', title: 'Simple texte', content: 'abc', type: 'text', attachments: [] }
+    ];
+
+    const results = SearchModule.search(mediaNotes, { type: 'drawing' });
+    assert.deepEqual(results.map(n => n.$id), ['d1', 'd2', 'd3']);
+  });
+
+  test('search should filter by audio type including attachment-based audio notes', () => {
+    const mediaNotes = [
+      { $id: 'a1', title: 'Vocal type', content: '', type: 'audio', attachments: [] },
+      { $id: 'a2', title: 'Vocal kind', content: '', type: 'text', attachments: [{ kind: 'audio', type: 'application/octet-stream', name: 'note.bin' }] },
+      { $id: 'a3', title: 'Vocal mime', content: '', type: 'text', attachments: [{ type: 'audio/webm;codecs=opus', name: 'voice-note-1.webm' }] },
+      { $id: 'a4', title: 'Simple texte', content: 'abc', type: 'text', attachments: [] }
+    ];
+
+    const results = SearchModule.search(mediaNotes, { type: 'audio' });
+    assert.deepEqual(results.map(n => n.$id), ['a1', 'a2', 'a3']);
+  });
 });

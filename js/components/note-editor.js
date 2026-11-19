@@ -11,6 +11,7 @@ import { debounce, deepClone } from '../utils/helpers.js';
 import { escapeHTML, sanitizeUrl } from '../utils/sanitize.js';
 import { eventBus } from '../utils/event-bus.js';
 import { db } from '../database/indexeddb.js';
+import { Toast } from './toast.js';
 
 export class NoteEditor {
   constructor() {
@@ -67,9 +68,9 @@ export class NoteEditor {
 
     document.getElementById('quickDrawingBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.expandCreator('text');
+      this.expandCreator('drawing');
       eventBus.emit('modal:drawing', {
-        onSave: (att) => this.addAttachment(att)
+        onSave: (att) => this.addAttachment(att, 'drawing')
       });
     });
 
@@ -81,9 +82,9 @@ export class NoteEditor {
 
     document.getElementById('quickAudioBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.expandCreator('text');
+      this.expandCreator('audio');
       eventBus.emit('modal:audio', {
-        onSave: (att) => this.addAttachment(att)
+        onSave: (att) => this.addAttachment(att, 'audio')
       });
     });
 
@@ -98,11 +99,20 @@ export class NoteEditor {
     // Listen to open modal requests from NoteCard
     eventBus.on('editor:open', (note) => this.openEditModal(note));
 
-    // Click outside creator to auto-save and collapse
+    // Click outside creator to auto-save and collapse (ignore active modals & popovers)
     document.addEventListener('click', (e) => {
-      if (this.creatorBox && !this.creatorBox.contains(e.target) && !this.expandedBox.classList.contains('hidden')) {
-        this.saveAndCollapse();
+      if (!this.creatorBox || this.expandedBox.classList.contains('hidden')) return;
+      if (
+        this.creatorBox.contains(e.target) ||
+        !document.body.contains(e.target) ||
+        e.target.id === 'imageFileInput' ||
+        e.target.closest('#modalsContainer') ||
+        e.target.closest('.color-popover, .reminder-picker-popover, .label-picker-popover') ||
+        document.querySelector('#modalsContainer .modal-backdrop')
+      ) {
+        return;
       }
+      this.saveAndCollapse();
     });
   }
 
@@ -127,7 +137,7 @@ export class NoteEditor {
 
   saveAndCollapse() {
     this.currentNote.title = this.titleInput.value.trim();
-    if (this.currentNote.type === 'text') {
+    if (this.currentNote.type !== 'checklist') {
       this.currentNote.content = this.contentInput.value.trim();
     }
 
@@ -173,21 +183,24 @@ export class NoteEditor {
     });
 
     // Drawing modal
-    document.getElementById('creatorDrawingBtn')?.addEventListener('click', () => {
+    document.getElementById('creatorDrawingBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       eventBus.emit('modal:drawing', {
-        onSave: (att) => this.addAttachment(att)
+        onSave: (att) => this.addAttachment(att, 'drawing')
       });
     });
 
     // Audio modal
-    document.getElementById('creatorAudioBtn')?.addEventListener('click', () => {
+    document.getElementById('creatorAudioBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       eventBus.emit('modal:audio', {
-        onSave: (att) => this.addAttachment(att)
+        onSave: (att) => this.addAttachment(att, 'audio')
       });
     });
 
     // Image upload
-    document.getElementById('creatorImageBtn')?.addEventListener('click', () => {
+    document.getElementById('creatorImageBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.triggerImageUpload((att) => this.addAttachment(att));
     });
 
@@ -222,33 +235,73 @@ export class NoteEditor {
     });
   }
 
-  addAttachment(attachment) {
+  addAttachment(attachment, sourceType = null) {
+    if (!attachment) return;
+
+    if (this.expandedBox && this.expandedBox.classList.contains('hidden')) {
+      this.expandCreator(sourceType || this.currentNote.type || 'text');
+    }
+
     this.currentNote.attachments.push(attachment);
+
+    if (this.currentNote.type === 'text') {
+      if (sourceType === 'drawing' || attachment.kind === 'drawing') {
+        this.currentNote.type = 'drawing';
+      } else if (sourceType === 'audio' || attachment.kind === 'audio' || attachment.type?.startsWith('audio/')) {
+        this.currentNote.type = 'audio';
+      }
+    }
+
     this.renderAttachments(this.attachmentsContainer, this.currentNote);
+
+    if (sourceType === 'drawing' || attachment.kind === 'drawing') {
+      Toast.show('Dessin ajouté à la note');
+    } else if (sourceType === 'audio' || attachment.kind === 'audio' || attachment.type?.startsWith('audio/')) {
+      Toast.show('Note vocale ajoutée à la note');
+    } else {
+      Toast.show('Pièce jointe ajoutée');
+    }
   }
 
   renderAttachments(container, note) {
     container.innerHTML = '';
     (note.attachments || []).forEach((att, idx) => {
+      const mime = att?.type || '';
       const item = document.createElement('div');
       item.className = 'attachment-preview-item';
-      if (att.type.startsWith('image/')) {
+
+      if (mime.startsWith('image/')) {
         item.innerHTML = `
-          <img src="${sanitizeUrl(att.url)}" alt="${escapeHTML(att.name)}">
+          <img src="${sanitizeUrl(att.url)}" alt="${escapeHTML(att.name || 'Image')}">
           <button class="attachment-remove-btn" title="Supprimer">×</button>
         `;
-      } else if (att.type.startsWith('audio/')) {
+      } else if (mime.startsWith('audio/')) {
+        item.classList.add('attachment-audio-item');
+        const durationLabel = att.duration ? ` • ${escapeHTML(att.duration)}` : '';
         item.innerHTML = `
-          <div style="padding:10px;font-size:11px;text-align:center;">🎵 Audio</div>
+          <div class="attachment-audio-label">🎵 Note vocale${durationLabel}</div>
+          <audio controls preload="metadata" src="${sanitizeUrl(att.url)}"></audio>
+          <button class="attachment-remove-btn" title="Supprimer">×</button>
+        `;
+      } else {
+        item.innerHTML = `
+          <div style="padding:10px;font-size:11px;text-align:center;">📎 ${escapeHTML(att?.name || 'Fichier')}</div>
           <button class="attachment-remove-btn" title="Supprimer">×</button>
         `;
       }
-      item.querySelector('.attachment-remove-btn').onclick = (e) => {
-        e.stopPropagation();
-        note.attachments.splice(idx, 1);
-        storage.deleteAttachment(att);
-        this.renderAttachments(container, note);
-      };
+
+      const removeBtn = item.querySelector('.attachment-remove-btn');
+      if (removeBtn) {
+        removeBtn.onclick = (e) => {
+          e.stopPropagation();
+          note.attachments.splice(idx, 1);
+          storage.deleteAttachment(att);
+          if (note.$id) {
+            NotesModule.updateNote(note.$id, { attachments: note.attachments });
+          }
+          this.renderAttachments(container, note);
+        };
+      }
       container.appendChild(item);
     });
   }
@@ -369,7 +422,15 @@ export class NoteEditor {
    * Open Full Modal Editor for existing note
    */
   openEditModal(note) {
+    if (this.modalBackdrop) {
+      this.modalBackdrop.remove();
+      this.modalBackdrop = null;
+    }
+
     const editNote = deepClone(note);
+    if (!Array.isArray(editNote.attachments)) {
+      editNote.attachments = [];
+    }
     const container = document.getElementById('modalsContainer');
     if (!container) return;
 
@@ -396,6 +457,7 @@ export class NoteEditor {
             <button id="modalColorBtn" class="btn-icon" title="Couleur"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 0 20v-2a8 8 0 0 0 0-16V2z"></path></svg></button>
             <button id="modalImageBtn" class="btn-icon" title="Image"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></button>
             <button id="modalDrawingBtn" class="btn-icon" title="Dessin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg></button>
+            <button id="modalAudioBtn" class="btn-icon" title="Note vocale"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg></button>
             <button id="modalReminderBtn" class="btn-icon" title="Rappel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button>
             <button id="modalLabelsBtn" class="btn-icon" title="Libellés"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
             <button id="modalArchiveBtn" class="btn-icon" title="${editNote.archived ? 'Désarchiver' : 'Archiver'}">
@@ -427,6 +489,26 @@ export class NoteEditor {
       this.renderChecklist(chkContainer, editNote);
     }
 
+    const attachToModalNote = async (att, sourceType = null) => {
+      if (!att) return;
+      editNote.attachments.push(att);
+      if (editNote.type === 'text' && (sourceType === 'drawing' || sourceType === 'audio')) {
+        editNote.type = sourceType;
+      }
+      this.renderAttachments(attContainer, editNote);
+      await NotesModule.updateNote(editNote.$id, {
+        attachments: editNote.attachments,
+        type: editNote.type
+      });
+      if (sourceType === 'drawing') {
+        Toast.show('Dessin ajouté à la note');
+      } else if (sourceType === 'audio') {
+        Toast.show('Note vocale ajoutée à la note');
+      } else {
+        Toast.show('Pièce jointe ajoutée');
+      }
+    };
+
     // Live auto-save on input with debounce
     const autoSave = debounce(() => {
       editNote.title = titleEl.value;
@@ -456,23 +538,25 @@ export class NoteEditor {
     };
 
     // Drawing in modal
-    this.modalBackdrop.querySelector('#modalDrawingBtn').onclick = () => {
+    this.modalBackdrop.querySelector('#modalDrawingBtn').onclick = (e) => {
+      e.stopPropagation();
       eventBus.emit('modal:drawing', {
-        onSave: (att) => {
-          editNote.attachments.push(att);
-          this.renderAttachments(attContainer, editNote);
-          NotesModule.updateNote(editNote.$id, { attachments: editNote.attachments });
-        }
+        onSave: (att) => attachToModalNote(att, 'drawing')
+      });
+    };
+
+    // Audio in modal
+    this.modalBackdrop.querySelector('#modalAudioBtn').onclick = (e) => {
+      e.stopPropagation();
+      eventBus.emit('modal:audio', {
+        onSave: (att) => attachToModalNote(att, 'audio')
       });
     };
 
     // Image upload in modal
-    this.modalBackdrop.querySelector('#modalImageBtn').onclick = () => {
-      this.triggerImageUpload((att) => {
-        editNote.attachments.push(att);
-        this.renderAttachments(attContainer, editNote);
-        NotesModule.updateNote(editNote.$id, { attachments: editNote.attachments });
-      });
+    this.modalBackdrop.querySelector('#modalImageBtn').onclick = (e) => {
+      e.stopPropagation();
+      this.triggerImageUpload((att) => attachToModalNote(att));
     };
 
     // Reminder in modal
@@ -505,6 +589,7 @@ export class NoteEditor {
         onAction: () => NotesModule.toggleArchive(editNote.$id)
       });
       this.modalBackdrop.remove();
+      this.modalBackdrop = null;
     };
 
     // Close button
@@ -512,11 +597,13 @@ export class NoteEditor {
       editNote.title = titleEl.value;
       if (contentEl) editNote.content = contentEl.value;
       NotesModule.updateNote(editNote.$id, editNote);
-      this.modalBackdrop.remove();
+      this.modalBackdrop?.remove();
+      this.modalBackdrop = null;
     };
 
     this.modalBackdrop.querySelector('#modalCloseBtn').onclick = close;
     this.modalBackdrop.onclick = (e) => {
+      e.stopPropagation();
       if (e.target === this.modalBackdrop) close();
     };
   }
@@ -674,11 +761,17 @@ export class NoteEditor {
 
     fileInput.onchange = async () => {
       const files = Array.from(fileInput.files);
-      for (const file of files) {
-        const attachment = await storage.saveAttachment(file, file.name, file.type);
-        onUploaded(attachment);
+      try {
+        for (const file of files) {
+          const attachment = await storage.saveAttachment(file, file.name, file.type);
+          onUploaded(attachment);
+        }
+      } catch (err) {
+        console.error('[NoteEditor] Erreur upload image :', err);
+        Toast.show(err.message || 'Impossible d\'ajouter l\'image.');
+      } finally {
+        fileInput.value = ''; // Reset
       }
-      fileInput.value = ''; // Reset
     };
 
     fileInput.click();

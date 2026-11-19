@@ -36,8 +36,22 @@ export class SearchModule {
       }
 
       // 4. Note type filter ('text' | 'checklist' | 'drawing' | 'audio')
-      if (type && note.type !== type) {
-        return false;
+      if (type) {
+        if (type === 'drawing') {
+          const hasDrawingAttachment = Array.isArray(note.attachments) &&
+            note.attachments.some(a => a?.kind === 'drawing' || a?.name?.startsWith('drawing-'));
+          if (note.type !== 'drawing' && !hasDrawingAttachment) {
+            return false;
+          }
+        } else if (type === 'audio') {
+          const hasAudioAttachment = Array.isArray(note.attachments) &&
+            note.attachments.some(a => a?.kind === 'audio' || a?.type?.startsWith('audio/'));
+          if (note.type !== 'audio' && !hasAudioAttachment) {
+            return false;
+          }
+        } else if (note.type !== type) {
+          return false;
+        }
       }
 
       // 5. Label filter

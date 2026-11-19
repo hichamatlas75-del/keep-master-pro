@@ -15,6 +15,7 @@ import { ConflictManager } from './conflict-manager.js';
 import { APP_CONFIG } from '../config.js';
 import { eventBus } from '../utils/event-bus.js';
 import { createNoteModel, createLabelModel } from '../database/schema.js';
+import { deepClone } from '../utils/helpers.js';
 
 class SyncEngine {
   constructor() {
@@ -130,9 +131,9 @@ class SyncEngine {
     const operations = await syncQueue.getPendingOperations(40);
     if (!operations || operations.length === 0) return;
 
-    const { doc, writeBatch } = firebase.SDK.firestore;
+    const { doc, writeBatch, setDoc, deleteDoc } = firebase.SDK.firestore;
     const batch = writeBatch(firebase.firestore);
-    const opsToDequeue = [];
+    const preparedOps = [];
 
     for (const op of operations) {
       try {
@@ -142,36 +143,98 @@ class SyncEngine {
           const payload = this.formatPayloadForFirestore(op.data);
           batch.set(docRef, payload, { merge: true });
           this.recentLocalWrites.set(op.documentId, Date.now());
+          preparedOps.push({ op, docRef, payload });
         } else if (op.action === 'DELETE') {
           batch.delete(docRef);
+          preparedOps.push({ op, docRef, payload: null });
         }
-
-        opsToDequeue.push(op.id);
       } catch (err) {
         console.warn(`[SyncEngine] Erreur préparation batch pour ${op.documentId}:`, err);
       }
     }
 
-    if (opsToDequeue.length > 0) {
-      // Commit all batched operations in a single Firestore call!
-      await batch.commit();
-
-      // Dequeue all successful operations
-      for (const opId of opsToDequeue) {
-        await syncQueue.remove(opId);
+    if (preparedOps.length > 0) {
+      try {
+        // Commit all batched operations in a single Firestore call!
+        await batch.commit();
+        for (const { op } of preparedOps) {
+          await syncQueue.remove(op.id);
+        }
+      } catch (batchErr) {
+        console.warn('[SyncEngine] Échec du batch Firestore, repli unitaire :', batchErr.message);
+        for (const { op, docRef, payload } of preparedOps) {
+          try {
+            if (op.action === 'CREATE' || op.action === 'UPDATE') {
+              await setDoc(docRef, payload, { merge: true });
+              this.recentLocalWrites.set(op.documentId, Date.now());
+            } else if (op.action === 'DELETE') {
+              await deleteDoc(docRef);
+            }
+            await syncQueue.remove(op.id);
+          } catch (singleErr) {
+            console.warn(`[SyncEngine] Échec opération unitaire pour ${op.documentId}:`, singleErr.message);
+          }
+        }
       }
     }
   }
 
   /**
-   * Format note data for Firestore
+   * Format note data for Firestore (enforcing Spark 1MB doc limit safely)
    */
   formatPayloadForFirestore(data) {
     if (!data) return {};
-    const payload = { ...data };
+    const payload = deepClone(data);
     payload.userId = auth.getUserId();
     payload.updatedAt = payload.updatedAt || new Date().toISOString();
+
+    if (Array.isArray(payload.attachments) && JSON.stringify(payload).length > 900000) {
+      const indexed = payload.attachments
+        .map((att, idx) => ({ idx, len: att?.url ? att.url.length : 0 }))
+        .sort((a, b) => b.len - a.len);
+
+      for (const entry of indexed) {
+        if (JSON.stringify(payload).length <= 900000) break;
+        const att = payload.attachments[entry.idx];
+        if (att && att.url) {
+          console.warn(`[SyncEngine] Pièce jointe ${att.name || att.id} conservée localement (taille Firestore > 900Ko).`);
+          att.url = '';
+          att.synced = false;
+        }
+      }
+    }
+
     return payload;
+  }
+
+  /**
+   * Restore local attachment data URLs if stripped on remote Firestore payload
+   */
+  async hydrateLocalAttachments(remoteNote, localNote) {
+    if (!remoteNote || !Array.isArray(remoteNote.attachments)) return remoteNote;
+
+    const localAttMap = new Map(
+      (localNote?.attachments || [])
+        .filter(a => a && a.localBlobId && a.url)
+        .map(a => [a.localBlobId, a.url])
+    );
+
+    for (const att of remoteNote.attachments) {
+      if (att && !att.url && att.localBlobId) {
+        if (localAttMap.has(att.localBlobId)) {
+          att.url = localAttMap.get(att.localBlobId);
+          att.synced = true;
+        } else {
+          const record = await db.getBlob(att.localBlobId);
+          if (record?.blob) {
+            att.url = record.blob;
+            att.synced = true;
+          }
+        }
+      }
+    }
+
+    return remoteNote;
   }
 
   /**
@@ -214,6 +277,7 @@ class SyncEngine {
       }
 
       const localNote = await db.getNote(remoteNote.$id);
+      await this.hydrateLocalAttachments(remoteNote, localNote);
       const { resolvedNote, conflictCopy } = ConflictManager.resolve(localNote, remoteNote);
 
       if (conflictCopy) {
@@ -299,6 +363,7 @@ class SyncEngine {
               const localNote = await db.getNote(remoteNote.$id);
 
               if (!localNote || localNote.updatedAt < remoteNote.updatedAt) {
+                await this.hydrateLocalAttachments(remoteNote, localNote);
                 await db.saveNote(remoteNote);
                 hasChanges = true;
               }

@@ -18,9 +18,14 @@ describe('Sanitize & Security Tests', () => {
     assert.equal(sanitizeUrl('https://example.com/image.png'), 'https://example.com/image.png');
     assert.equal(sanitizeUrl('http://example.com/pic.jpg'), 'http://example.com/pic.jpg');
     assert.equal(sanitizeUrl('data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=='), 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==');
+    assert.equal(sanitizeUrl('data:audio/webm;base64,GkXfo59ChoEBQveBAULygQRC'), 'data:audio/webm;base64,GkXfo59ChoEBQveBAULygQRC');
+    assert.equal(sanitizeUrl('data:audio/webm;codecs=opus;base64,GkXfo59ChoEB'), 'data:audio/webm;codecs=opus;base64,GkXfo59ChoEB');
+    assert.equal(sanitizeUrl('data:audio/mp4;base64,AAAAIGZ0eXBpc29t'), 'data:audio/mp4;base64,AAAAIGZ0eXBpc29t');
+    assert.equal(sanitizeUrl('data:audio/ogg;codecs=opus;base64,T2dnUwAC'), 'data:audio/ogg;codecs=opus;base64,T2dnUwAC');
     assert.equal(sanitizeUrl('blob:http://localhost:3000/12345'), 'blob:http://localhost:3000/12345');
 
     // Malicious URLs must be rejected
+    assert.equal(sanitizeUrl('data:text/html;base64,PHNjcmlwdD4='), '');
     assert.equal(sanitizeUrl('javascript:alert(1)'), '');
     assert.equal(sanitizeUrl('JAVASCRIPT:steal()'), '');
     assert.equal(sanitizeUrl('vbscript:msgbox(1)'), '');

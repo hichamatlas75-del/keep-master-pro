@@ -12,7 +12,11 @@ class StorageService {
   /**
    * Save an attachment locally in IndexedDB media_blobs
    */
-  async saveAttachment(blob, filename, mimeType) {
+  async saveAttachment(blob, filename, mimeType, extraMeta = {}) {
+    if (!blob || !(blob instanceof Blob) || blob.size === 0) {
+      throw new Error('Fichier média vide ou invalide.');
+    }
+
     const localBlobId = 'blob_' + generateId();
 
     // 1. Optimize images if needed to stay within safe storage/quota limits
@@ -30,7 +34,14 @@ class StorageService {
 
     // 2. Convert to dataURL and store in IndexedDB media_blobs
     const dataURL = await blobToDataURL(finalBlob);
-    await db.saveBlob(localBlobId, dataURL, finalMime);
+    try {
+      await db.saveBlob(localBlobId, dataURL, finalMime);
+    } catch (err) {
+      if (err && err.name === 'QuotaExceededError') {
+        throw new Error('Espace de stockage local insuffisant pour enregistrer ce fichier.');
+      }
+      throw err;
+    }
 
     const attachmentRecord = {
       id: generateId(),
@@ -40,7 +51,8 @@ class StorageService {
       size: finalBlob.size,
       url: dataURL, // Immediately available offline and included in JSON backups
       remoteFileId: null,
-      synced: true // Local-first is self-contained
+      synced: true, // Local-first is self-contained
+      ...extraMeta
     };
 
     return attachmentRecord;

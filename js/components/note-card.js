@@ -14,6 +14,7 @@ import { ShareModule } from '../modules/share.js';
 import { Toast } from './toast.js';
 import { Dialog } from './dialog.js';
 import { eventBus } from '../utils/event-bus.js';
+import { storage } from '../services/storage.js';
 
 export class NoteCard {
   /**
@@ -35,27 +36,31 @@ export class NoteCard {
 
     // 2. Images / Drawings
     let imagesHtml = '';
-    const visualAttachments = (note.attachments || []).filter(a => a.type.startsWith('image/'));
+    const visualAttachments = (note.attachments || []).filter(a => a?.type?.startsWith('image/'));
     if (visualAttachments.length > 0) {
       const imgElements = visualAttachments.slice(0, 4).map(a => `
-        <img src="${sanitizeUrl(a.url)}" alt="${escapeHTML(a.name)}" loading="lazy">
+        <img src="${sanitizeUrl(a.url)}" alt="${escapeHTML(a.name || 'Image')}" loading="lazy">
       `).join('');
       imagesHtml = `<div class="note-card-images">${imgElements}</div>`;
     }
 
-    // 3. Audio Voice Note Widget
+    // 3. Audio Voice Note Widgets
     let audioHtml = '';
-    const audioAttachment = (note.attachments || []).find(a => a.type.startsWith('audio/'));
-    if (audioAttachment) {
-      audioHtml = `
-        <div class="audio-card-widget" data-action="audio-play">
-          <button class="btn-icon" style="width:28px;height:28px;" title="Écouter la note vocale">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-          </button>
-          <span class="audio-duration">Note vocale</span>
-          <audio src="${sanitizeUrl(audioAttachment.url)}" preload="none"></audio>
-        </div>
-      `;
+    const audioAttachments = (note.attachments || []).filter(a => a?.type?.startsWith('audio/'));
+    if (audioAttachments.length > 0) {
+      audioHtml = audioAttachments.map(att => {
+        const durationText = att.duration ? ` • ${escapeHTML(att.duration)}` : '';
+        const safeSrc = sanitizeUrl(att.url);
+        return `
+          <div class="audio-card-widget" data-action="audio-play" data-local-blob-id="${escapeHTML(att.localBlobId || '')}">
+            <button class="btn-icon" style="width:28px;height:28px;" title="Écouter la note vocale">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            </button>
+            <span class="audio-duration">Note vocale${durationText}</span>
+            <audio ${safeSrc ? `src="${safeSrc}"` : ''} preload="metadata"></audio>
+          </div>
+        `;
+      }).join('');
     }
 
     // 4. Checklist Items Preview
@@ -164,7 +169,7 @@ export class NoteCard {
   static bindEvents(card, note) {
     // Click card body to open full note editor modal
     card.onclick = (e) => {
-      if (e.target.closest('button') || e.target.closest('input')) return;
+      if (e.target.closest('button') || e.target.closest('input') || e.target.closest('[data-action="audio-play"]')) return;
       if (note.trashed) return;
       eventBus.emit('editor:open', note);
     };
@@ -188,24 +193,59 @@ export class NoteCard {
     });
 
     // Audio playback toggle (clicking anywhere on widget toggles audio without opening editor)
-    const audioWidget = card.querySelector('[data-action="audio-play"]');
-    if (audioWidget) {
+    const PLAY_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+    const PAUSE_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
+
+    card.querySelectorAll('[data-action="audio-play"]').forEach(audioWidget => {
       const audioEl = audioWidget.querySelector('audio');
       const btn = audioWidget.querySelector('button');
-      audioWidget.onclick = (e) => {
-        e.stopPropagation();
-        if (audioEl.paused) {
-          audioEl.play();
-          btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
-        } else {
-          audioEl.pause();
-          btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
-        }
+      if (!audioEl || !btn) return;
+
+      audioEl.onplay = () => {
+        btn.innerHTML = PAUSE_SVG;
+      };
+      audioEl.onpause = () => {
+        btn.innerHTML = PLAY_SVG;
       };
       audioEl.onended = () => {
-        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+        btn.innerHTML = PLAY_SVG;
       };
-    }
+
+      audioWidget.onclick = async (e) => {
+        e.stopPropagation();
+        if (audioEl.paused) {
+          if (!audioEl.getAttribute('src') && audioWidget.dataset.localBlobId) {
+            try {
+              const record = await storage.getAttachment(audioWidget.dataset.localBlobId);
+              const safeUrl = sanitizeUrl(record?.blob || '');
+              if (safeUrl) {
+                audioEl.src = safeUrl;
+              }
+            } catch (err) {
+              console.warn('[NoteCard] Échec chargement blob audio :', err);
+            }
+          }
+
+          if (!audioEl.getAttribute('src')) {
+            Toast.show('Fichier audio indisponible.');
+            return;
+          }
+
+          document.querySelectorAll('audio').forEach((other) => {
+            if (other !== audioEl && !other.paused) {
+              other.pause();
+            }
+          });
+
+          audioEl.play().catch((err) => {
+            console.warn('[NoteCard] Lecture audio impossible :', err);
+            Toast.show('Impossible de lire la note vocale.');
+          });
+        } else {
+          audioEl.pause();
+        }
+      };
+    });
 
     // Color popover
     const colorBtn = card.querySelector('[data-action="color"]');

@@ -124,9 +124,12 @@ class App {
     } else if (action === 'new-list') {
       setTimeout(() => this.noteEditor.expandCreator('checklist'), 300);
     } else if (action === 'new-drawing') {
-      setTimeout(() => eventBus.emit('modal:drawing', {
-        onSave: (att) => this.noteEditor.addAttachment(att)
-      }), 300);
+      setTimeout(() => {
+        this.noteEditor.expandCreator('drawing');
+        eventBus.emit('modal:drawing', {
+          onSave: (att) => this.noteEditor.addAttachment(att, 'drawing')
+        });
+      }, 300);
     }
   }
 

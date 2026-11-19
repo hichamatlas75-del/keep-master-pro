@@ -6,6 +6,7 @@
 import { DrawingEngine } from '../modules/drawing.js';
 import { storage } from '../services/storage.js';
 import { eventBus } from '../utils/event-bus.js';
+import { Toast } from './toast.js';
 
 export class DrawingModal {
   constructor() {
@@ -24,14 +25,22 @@ export class DrawingModal {
     const container = document.getElementById('modalsContainer');
     if (!container) return;
 
+    if (this.modalEl) {
+      this.engine?.destroy();
+      this.engine = null;
+      this.modalEl.remove();
+      this.modalEl = null;
+    }
+
     this.modalEl = document.createElement('div');
     this.modalEl.className = 'modal-backdrop';
+    this.modalEl.addEventListener('click', (e) => e.stopPropagation());
 
     this.modalEl.innerHTML = `
       <div class="modal-content" style="max-width: 720px;">
         <div class="modal-header">
           <h3 class="modal-title">Dessin & Croquis</h3>
-          <button id="closeDrawingModalBtn" class="btn-icon">×</button>
+          <button id="closeDrawingModalBtn" class="btn-icon" aria-label="Fermer">×</button>
         </div>
 
         <div class="modal-body">
@@ -79,24 +88,36 @@ export class DrawingModal {
     const eraserBtn = this.modalEl.querySelector('#drawEraserBtn');
     const colorPicker = this.modalEl.querySelector('#drawColorPicker');
     const strokeSlider = this.modalEl.querySelector('#drawStrokeWidth');
+    const saveBtn = this.modalEl.querySelector('#saveDrawingBtn');
+
+    const syncToolButtons = (activeTool) => {
+      if (activeTool === 'pen') {
+        penBtn.style.background = 'var(--accent-subtle)';
+        penBtn.style.color = 'var(--accent-text)';
+        eraserBtn.style.background = 'transparent';
+        eraserBtn.style.color = 'var(--text-secondary)';
+      } else {
+        eraserBtn.style.background = 'var(--accent-subtle)';
+        eraserBtn.style.color = 'var(--accent-text)';
+        penBtn.style.background = 'transparent';
+        penBtn.style.color = 'var(--text-secondary)';
+      }
+    };
 
     penBtn.onclick = () => {
       this.engine.setTool('pen');
-      penBtn.style.background = 'var(--accent-subtle)';
-      penBtn.style.color = 'var(--accent-text)';
-      eraserBtn.style.background = 'transparent';
-      eraserBtn.style.color = 'var(--text-secondary)';
+      syncToolButtons('pen');
     };
 
     eraserBtn.onclick = () => {
       this.engine.setTool('eraser');
-      eraserBtn.style.background = 'var(--accent-subtle)';
-      eraserBtn.style.color = 'var(--accent-text)';
-      penBtn.style.background = 'transparent';
-      penBtn.style.color = 'var(--text-secondary)';
+      syncToolButtons('eraser');
     };
 
-    colorPicker.oninput = (e) => this.engine.setColor(e.target.value);
+    colorPicker.oninput = (e) => {
+      this.engine.setColor(e.target.value);
+      syncToolButtons('pen');
+    };
     strokeSlider.oninput = (e) => this.engine.setWidth(e.target.value);
 
     this.modalEl.querySelector('#drawUndoBtn').onclick = () => this.engine.undo();
@@ -105,7 +126,9 @@ export class DrawingModal {
 
     // Close actions
     const close = () => {
-      this.modalEl.remove();
+      this.engine?.destroy();
+      this.engine = null;
+      this.modalEl?.remove();
       this.modalEl = null;
     };
 
@@ -113,12 +136,28 @@ export class DrawingModal {
     this.modalEl.querySelector('#cancelDrawingBtn').onclick = close;
 
     // Save action
-    this.modalEl.querySelector('#saveDrawingBtn').onclick = async () => {
-      const blob = await this.engine.exportBlob();
-      const filename = `drawing-${Date.now()}.png`;
-      const attachment = await storage.saveAttachment(blob, filename, 'image/png');
-      if (onSave) onSave(attachment);
-      close();
+    saveBtn.onclick = async () => {
+      if (saveBtn.disabled || !this.engine) return;
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Enregistrement...';
+
+      try {
+        const blob = await this.engine.exportBlob();
+        if (!blob || blob.size === 0) {
+          throw new Error('Le dessin est vide ou invalide.');
+        }
+
+        const filename = `drawing-${Date.now()}.png`;
+        const attachment = await storage.saveAttachment(blob, filename, 'image/png', { kind: 'drawing' });
+        if (onSave) await onSave(attachment);
+        close();
+      } catch (err) {
+        console.error('[DrawingModal] Erreur sauvegarde dessin :', err);
+        Toast.show(err.message || 'Impossible d\'enregistrer le dessin.');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Enregistrer le dessin';
+      }
     };
   }
 }
