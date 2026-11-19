@@ -10,22 +10,23 @@ export class SearchModule {
    * @param {Object} query - Search query and filters
    * @returns {Array} Filtered notes
    */
-  static search(notes, { query = '', color = null, type = null, label = null, pinned = null, archived = false, trashed = false } = {}) {
+  static search(notes, { query = '', color = null, type = null, label = null, pinned = null, archived = undefined, trashed = undefined } = {}) {
     if (!Array.isArray(notes)) return [];
 
     const normalizedQuery = this.normalize(query);
 
     return notes.filter((note) => {
       // 1. Base status filter (trashed / archived)
-      if (trashed !== undefined && Boolean(note.trashed) !== Boolean(trashed)) {
+      // Only filter by trashed/archived if explicitly specified in options
+      if (trashed !== undefined && trashed !== null && Boolean(note.trashed) !== Boolean(trashed)) {
         return false;
       }
-      if (!trashed && archived !== undefined && Boolean(note.archived) !== Boolean(archived)) {
+      if (archived !== undefined && archived !== null && Boolean(note.archived) !== Boolean(archived)) {
         return false;
       }
 
       // 2. Pinned filter
-      if (pinned !== null && Boolean(note.pinned) !== Boolean(pinned)) {
+      if (pinned !== null && pinned !== undefined && Boolean(note.pinned) !== Boolean(pinned)) {
         return false;
       }
 

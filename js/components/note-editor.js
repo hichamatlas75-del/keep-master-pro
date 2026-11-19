@@ -200,6 +200,19 @@ export class NoteEditor {
         this.renderChips(this.chipsContainer, this.currentNote);
       });
     });
+
+    // Archive in creator
+    document.getElementById('creatorArchiveBtn')?.addEventListener('click', () => {
+      this.currentNote.archived = true;
+      this.currentNote.pinned = false;
+      this.saveAndCollapse();
+      Toast.show('Note créée et archivée', {
+        actionText: 'Voir archives',
+        onAction: () => {
+          eventBus.emit('view:change', { view: 'archive', labelId: null });
+        }
+      });
+    });
   }
 
   addAttachment(attachment) {
@@ -363,7 +376,13 @@ export class NoteEditor {
             <button id="modalDrawingBtn" class="btn-icon" title="Dessin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg></button>
             <button id="modalReminderBtn" class="btn-icon" title="Rappel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button>
             <button id="modalLabelsBtn" class="btn-icon" title="Libellés"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>
-            <button id="modalArchiveBtn" class="btn-icon" title="Archiver"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg></button>
+            <button id="modalArchiveBtn" class="btn-icon" title="${editNote.archived ? 'Désarchiver' : 'Archiver'}">
+              ${editNote.archived ? `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><polyline points="10 13 12 11 14 13"></polyline><line x1="12" y1="11" x2="12" y2="17"></line></svg>
+              ` : `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
+              `}
+            </button>
           </div>
           <button id="modalCloseBtn" class="btn-primary">Fermer</button>
         </div>
@@ -454,8 +473,15 @@ export class NoteEditor {
     };
 
     // Archive in modal
-    this.modalBackdrop.querySelector('#modalArchiveBtn').onclick = () => {
-      NotesModule.toggleArchive(editNote.$id);
+    this.modalBackdrop.querySelector('#modalArchiveBtn').onclick = async () => {
+      editNote.title = titleEl.value;
+      if (contentEl) editNote.content = contentEl.value;
+      await NotesModule.updateNote(editNote.$id, editNote);
+      await NotesModule.toggleArchive(editNote.$id);
+      Toast.show(editNote.archived ? 'Note désarchivée' : 'Note archivée', {
+        actionText: 'Annuler',
+        onAction: () => NotesModule.toggleArchive(editNote.$id)
+      });
       this.modalBackdrop.remove();
     };
 

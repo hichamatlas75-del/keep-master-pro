@@ -117,7 +117,11 @@ export class NoteCard {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 0 20v-2a8 8 0 0 0 0-16V2z"></path></svg>
           </button>
           <button class="btn-icon" data-action="archive" title="${note.archived ? 'Désarchiver' : 'Archiver'}">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
+            ${note.archived ? `
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><polyline points="10 13 12 11 14 13"></polyline><line x1="12" y1="11" x2="12" y2="17"></line></svg>
+            ` : `
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
+            `}
           </button>
           <button class="btn-icon" data-action="more" title="Plus d'actions">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
@@ -323,6 +327,14 @@ export class NoteCard {
     `;
 
     const items = [
+      { text: note.archived ? 'Désarchiver' : 'Archiver', icon: note.archived ? '📤' : '📦', action: () => {
+        NotesModule.toggleArchive(note.$id).then(() => {
+          Toast.show(note.archived ? 'Note désarchivée' : 'Note archivée', {
+            actionText: 'Annuler',
+            onAction: () => NotesModule.toggleArchive(note.$id)
+          });
+        });
+      }},
       { text: 'Supprimer la note', icon: '🗑️', action: () => NotesModule.moveToTrash(note.$id) },
       { text: 'Dupliquer', icon: '📄', action: () => NotesModule.duplicateNote(note.$id) },
       { text: 'Partager', icon: '🔗', action: () => ShareModule.shareNative(note).then(r => {
