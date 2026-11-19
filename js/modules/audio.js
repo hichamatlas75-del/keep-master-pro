@@ -59,15 +59,17 @@ export class AudioEngine {
       this.mediaRecorder.start(250); // Collect slice every 250ms
       this.isRecording = true;
       this.isPaused = false;
-      this.startTime = Date.now();
+      this.accumulatedMs = 0;
+      this.segmentStart = Date.now();
 
-      // Start elapsed timer
+      // Start elapsed timer (handles pauses accurately)
       this.timerInterval = setInterval(() => {
         if (!this.isPaused) {
-          this.elapsedTime = Math.floor((Date.now() - this.startTime) / 1000);
+          const totalMs = this.accumulatedMs + (Date.now() - this.segmentStart);
+          this.elapsedTime = Math.floor(totalMs / 1000);
           if (this.onTick) this.onTick(this.formatTime(this.elapsedTime));
         }
-      }, 500);
+      }, 250);
 
       return true;
     } catch (err) {
@@ -83,6 +85,7 @@ export class AudioEngine {
     if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
       this.mediaRecorder.pause();
       this.isPaused = true;
+      this.accumulatedMs += Date.now() - this.segmentStart;
     }
   }
 
@@ -93,6 +96,7 @@ export class AudioEngine {
     if (this.mediaRecorder && this.mediaRecorder.state === 'paused') {
       this.mediaRecorder.resume();
       this.isPaused = false;
+      this.segmentStart = Date.now();
     }
   }
 
@@ -106,6 +110,11 @@ export class AudioEngine {
       }
 
       clearInterval(this.timerInterval);
+
+      if (!this.isPaused) {
+        this.accumulatedMs += Date.now() - this.segmentStart;
+      }
+      this.elapsedTime = Math.floor(this.accumulatedMs / 1000);
 
       this.mediaRecorder.onstop = () => {
         const mimeType = this.mediaRecorder.mimeType || 'audio/webm';

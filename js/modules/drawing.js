@@ -31,8 +31,12 @@ export class DrawingEngine {
   }
 
   resizeCanvas() {
-    const rect = this.canvas.parentElement.getBoundingClientRect();
+    const parent = this.canvas.parentElement;
+    if (!parent) return;
+    const rect = parent.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
     const dpr = window.devicePixelRatio || 1;
+    const lastData = this.history && this.history.length > 0 ? this.history[this.history.length - 1] : null;
 
     this.canvas.width = rect.width * dpr;
     this.canvas.height = rect.height * dpr;
@@ -41,6 +45,14 @@ export class DrawingEngine {
     // Initial white background
     this.ctx.fillStyle = '#FFFFFF';
     this.ctx.fillRect(0, 0, rect.width, rect.height);
+
+    if (lastData) {
+      const img = new Image();
+      img.src = lastData;
+      img.onload = () => {
+        this.ctx.drawImage(img, 0, 0, rect.width, rect.height);
+      };
+    }
   }
 
   getPointerPos(e) {

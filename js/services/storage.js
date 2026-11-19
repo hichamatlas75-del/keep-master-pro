@@ -5,7 +5,7 @@
  */
 
 import { db } from '../database/indexeddb.js';
-import { generateId, blobToDataURL } from '../utils/helpers.js';
+import { generateId, blobToDataURL, compressImage } from '../utils/helpers.js';
 import { APP_CONFIG } from '../config.js';
 
 class StorageService {
@@ -15,16 +15,29 @@ class StorageService {
   async saveAttachment(blob, filename, mimeType) {
     const localBlobId = 'blob_' + generateId();
 
-    // 1. Convert to dataURL and store in IndexedDB media_blobs
-    const dataURL = await blobToDataURL(blob);
-    await db.saveBlob(localBlobId, dataURL, mimeType);
+    // 1. Optimize images if needed to stay within safe storage/quota limits
+    let finalBlob = blob;
+    let finalMime = mimeType || blob.type || 'application/octet-stream';
+
+    if (finalMime.startsWith('image/')) {
+      try {
+        finalBlob = await compressImage(blob);
+        finalMime = finalBlob.type || finalMime;
+      } catch (e) {
+        console.warn('[Storage] Compression d\'image ignorée :', e);
+      }
+    }
+
+    // 2. Convert to dataURL and store in IndexedDB media_blobs
+    const dataURL = await blobToDataURL(finalBlob);
+    await db.saveBlob(localBlobId, dataURL, finalMime);
 
     const attachmentRecord = {
       id: generateId(),
       localBlobId,
       name: filename || `attachment-${Date.now()}`,
-      type: mimeType,
-      size: blob.size,
+      type: finalMime,
+      size: finalBlob.size,
       url: dataURL, // Immediately available offline and included in JSON backups
       remoteFileId: null,
       synced: true // Local-first is self-contained

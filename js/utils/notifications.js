@@ -125,14 +125,17 @@ class NotificationManager {
       data: { noteId: note.$id }
     });
 
-    // Mark reminder as triggered in note
-    import('../database/indexeddb.js').then(async ({ db }) => {
-      if (note.reminder) {
-        note.reminder.completed = true;
-        note.updatedAt = new Date().toISOString();
-        await db.saveNote(note);
-      }
-    });
+    // Mark reminder as triggered in note, update UI and queue sync
+    if (note.reminder && !note.reminder.completed) {
+      import('../modules/notes.js').then(({ NotesModule }) => {
+        NotesModule.updateNote(note.$id, {
+          reminder: {
+            ...note.reminder,
+            completed: true
+          }
+        });
+      }).catch((err) => console.warn('[Notifications] Erreur mise à jour rappel :', err));
+    }
   }
 
   /**

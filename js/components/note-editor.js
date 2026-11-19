@@ -29,6 +29,13 @@ export class NoteEditor {
     this.currentNote = this.getDefaultState();
     this.modalBackdrop = null;
 
+    // Debounced autosave for checklist text changes in edit modal
+    this.saveNoteChecklistDebounced = debounce((note) => {
+      if (note?.$id) {
+        NotesModule.updateNote(note.$id, { checklist: note.checklist });
+      }
+    }, 350);
+
     this.init();
   }
 
@@ -300,17 +307,26 @@ export class NoteEditor {
 
       checkbox.onchange = () => {
         note.checklist = ChecklistModule.toggleItem(note.checklist, item.id);
+        if (note.$id) {
+          NotesModule.updateNote(note.$id, { checklist: note.checklist });
+        }
         this.renderChecklist(container, note);
       };
 
       textInput.oninput = () => {
         item.text = textInput.value;
+        if (note.$id) {
+          this.saveNoteChecklistDebounced(note);
+        }
       };
 
       textInput.onkeydown = (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
           note.checklist = ChecklistModule.addItem(note.checklist, ' ');
+          if (note.$id) {
+            NotesModule.updateNote(note.$id, { checklist: note.checklist });
+          }
           this.renderChecklist(container, note);
           // Focus last created item
           setTimeout(() => {
@@ -322,6 +338,9 @@ export class NoteEditor {
 
       delBtn.onclick = () => {
         note.checklist = ChecklistModule.removeItem(note.checklist, item.id);
+        if (note.$id) {
+          NotesModule.updateNote(note.$id, { checklist: note.checklist });
+        }
         this.renderChecklist(container, note);
       };
 
@@ -334,6 +353,9 @@ export class NoteEditor {
     addRow.innerHTML = `<span>+</span> <span>Ajouter un élément</span>`;
     addRow.onclick = () => {
       note.checklist.push({ id: Date.now().toString(36), text: '', completed: false });
+      if (note.$id) {
+        NotesModule.updateNote(note.$id, { checklist: note.checklist });
+      }
       this.renderChecklist(container, note);
       setTimeout(() => {
         const inputs = container.querySelectorAll('.checklist-text');

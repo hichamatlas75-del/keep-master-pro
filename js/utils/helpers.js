@@ -115,3 +115,64 @@ export function dataURLToBlob(dataURL) {
 
   return new Blob([uInt8Array], { type: contentType });
 }
+
+/**
+ * Compress and resize an image blob to fit safely within Spark free plan limits
+ * Prevents exceeding Firestore 1MB document limit.
+ */
+export async function compressImage(fileOrBlob, maxWidth = 1280, maxHeight = 1280, quality = 0.82) {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || typeof Image === 'undefined') {
+    return fileOrBlob;
+  }
+  if (!fileOrBlob || !fileOrBlob.type || !fileOrBlob.type.startsWith('image/') || fileOrBlob.type === 'image/gif' || fileOrBlob.type === 'image/svg+xml') {
+    return fileOrBlob;
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(fileOrBlob);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+
+      if (width <= maxWidth && height <= maxHeight && fileOrBlob.size < 400 * 1024) {
+        return resolve(fileOrBlob);
+      }
+
+      // Calculate constrained aspect ratio
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          resolve(blob || fileOrBlob);
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(fileOrBlob);
+    };
+
+    img.src = url;
+  });
+}

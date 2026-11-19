@@ -282,23 +282,36 @@ class SyncEngine {
           return;
         }
 
-        snapshot.docChanges().forEach(async (change) => {
-          const docData = change.doc.data();
-          docData.$id = change.doc.id;
+        (async () => {
+          let hasChanges = false;
+          for (const change of snapshot.docChanges()) {
+            const docData = change.doc.data();
+            docData.$id = change.doc.id;
 
-          if (change.type === 'added' || change.type === 'modified') {
-            const remoteNote = createNoteModel(docData);
-            const localNote = await db.getNote(remoteNote.$id);
-
-            if (!localNote || localNote.updatedAt < remoteNote.updatedAt) {
-              await db.saveNote(remoteNote);
-              eventBus.emit('notes:changed', { action: 'realtime-update' });
+            // Avoid echo of recent local write from this device
+            const localWriteTime = this.recentLocalWrites.get(docData.$id);
+            if (localWriteTime && (Date.now() - localWriteTime) < 8000) {
+              continue;
             }
-          } else if (change.type === 'removed') {
-            await db.deleteNote(docData.$id);
-            eventBus.emit('notes:changed', { action: 'realtime-delete' });
+
+            if (change.type === 'added' || change.type === 'modified') {
+              const remoteNote = createNoteModel(docData);
+              const localNote = await db.getNote(remoteNote.$id);
+
+              if (!localNote || localNote.updatedAt < remoteNote.updatedAt) {
+                await db.saveNote(remoteNote);
+                hasChanges = true;
+              }
+            } else if (change.type === 'removed') {
+              await db.deleteNote(docData.$id);
+              hasChanges = true;
+            }
           }
-        });
+
+          if (hasChanges) {
+            eventBus.emit('notes:changed', { action: 'realtime-batch' });
+          }
+        })().catch((err) => console.warn('[SyncEngine] Erreur traitement temps réel :', err));
       }, (err) => {
         console.warn('[SyncEngine] Realtime Firestore arrêté :', err.message);
       });

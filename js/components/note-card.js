@@ -7,6 +7,7 @@ import { APP_CONFIG } from '../config.js';
 import { escapeHTML, sanitizeUrl } from '../utils/sanitize.js';
 import { formatDateTime } from '../utils/helpers.js';
 import { NotesModule } from '../modules/notes.js';
+import { ChecklistModule } from '../modules/checklist.js';
 import { ArchiveModule } from '../modules/archive.js';
 import { TrashModule } from '../modules/trash.js';
 import { ShareModule } from '../modules/share.js';
@@ -181,19 +182,17 @@ export class NoteCard {
     card.querySelectorAll('[data-action="checklist-toggle"]').forEach(checkbox => {
       checkbox.onchange = (e) => {
         e.stopPropagation();
-        import('../modules/checklist.js').then(({ ChecklistModule }) => {
-          const updatedList = ChecklistModule.toggleItem(note.checklist, checkbox.dataset.itemId);
-          NotesModule.updateNote(note.$id, { checklist: updatedList });
-        });
+        const updatedList = ChecklistModule.toggleItem(note.checklist, checkbox.dataset.itemId);
+        NotesModule.updateNote(note.$id, { checklist: updatedList });
       };
     });
 
-    // Audio playback toggle
+    // Audio playback toggle (clicking anywhere on widget toggles audio without opening editor)
     const audioWidget = card.querySelector('[data-action="audio-play"]');
     if (audioWidget) {
       const audioEl = audioWidget.querySelector('audio');
       const btn = audioWidget.querySelector('button');
-      btn.onclick = (e) => {
+      audioWidget.onclick = (e) => {
         e.stopPropagation();
         if (audioEl.paused) {
           audioEl.play();
