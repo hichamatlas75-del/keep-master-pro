@@ -1,0 +1,138 @@
+/**
+ * KEEP MASTER PRO - Theme & Color Tokens
+ * Light / Dark Modes & 10 Note Colors
+ */
+
+:root {
+  /* Fonts */
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* Spacing */
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* Border Radii */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 9999px;
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 350ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-card-hover: 0 4px 14px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.15);
+
+  /* Z-indices */
+  --z-header: 100;
+  --z-sidebar: 90;
+  --z-dropdown: 200;
+  --z-modal-backdrop: 300;
+  --z-modal: 310;
+  --z-toast: 400;
+}
+
+/* Light Theme (Default) */
+[data-theme="light"], :root:not([data-theme="dark"]) {
+  --bg-app: #FFFFFF;
+  --bg-sidebar: #FFFFFF;
+  --bg-surface: #FFFFFF;
+  --bg-surface-variant: #F1F3F4;
+  --bg-surface-hover: #E8EAED;
+  --bg-input: #F1F3F4;
+  --bg-input-focus: #FFFFFF;
+  --border-color: #E0E0E0;
+  --border-light: #ECEFF1;
+
+  --text-primary: #202124;
+  --text-secondary: #5F6368;
+  --text-muted: #80868B;
+  --text-inverse: #FFFFFF;
+
+  --accent-primary: #F59E0B;
+  --accent-hover: #D97706;
+  --accent-active: #B45309;
+  --accent-subtle: #FEF3C7;
+  --accent-text: #92400E;
+
+  --danger-color: #DC2626;
+  --danger-bg: #FEE2E2;
+  --success-color: #16A34A;
+  --success-bg: #DCFCE7;
+  --info-color: #2563EB;
+  --info-bg: #DBEAFE;
+
+  /* Note Colors - Light Mode */
+  --note-default: #FFFFFF;
+  --note-coral: #F28B82;
+  --note-peach: #FBBC04;
+  --note-sand: #FFF475;
+  --note-mint: #CCFF90;
+  --note-sage: #A7FFEB;
+  --note-fog: #CBF0F8;
+  --note-storm: #AECBFA;
+  --note-dusk: #D7AEFB;
+  --note-blossom: #FDCFE8;
+
+  --note-border: #E0E0E0;
+  --note-border-hover: rgba(0, 0, 0, 0.35);
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  --bg-app: #202124;
+  --bg-sidebar: #202124;
+  --bg-surface: #28292C;
+  --bg-surface-variant: #303134;
+  --bg-surface-hover: #3C4043;
+  --bg-input: #303134;
+  --bg-input-focus: #202124;
+  --border-color: #3C4043;
+  --border-light: #303134;
+
+  --text-primary: #E8EAED;
+  --text-secondary: #9AA0A6;
+  --text-muted: #80868B;
+  --text-inverse: #202124;
+
+  --accent-primary: #FBBF24;
+  --accent-hover: #F59E0B;
+  --accent-active: #D97706;
+  --accent-subtle: #453414;
+  --accent-text: #FDE68A;
+
+  --danger-color: #EF4444;
+  --danger-bg: #451A1A;
+  --success-color: #22C55E;
+  --success-bg: #143823;
+  --info-color: #3B82F6;
+  --info-bg: #1E293B;
+
+  /* Note Colors - Dark Mode */
+  --note-default: #28292C;
+  --note-coral: #5C2B29;
+  --note-peach: #614A19;
+  --note-sand: #635D19;
+  --note-mint: #345920;
+  --note-sage: #16504B;
+  --note-fog: #2D555E;
+  --note-storm: #1E3A5F;
+  --note-dusk: #42275E;
+  --note-blossom: #5B2245;
+
+  --note-border: #3C4043;
+  --note-border-hover: rgba(255, 255, 255, 0.4);
+}

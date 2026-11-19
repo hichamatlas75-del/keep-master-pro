@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFB300" />
+      <stop offset="100%" stop-color="#F57C00" />
+    </linearGradient>
+    <linearGradient id="noteGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#FFF9C4" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect x="32" y="32" width="448" height="448" rx="108" fill="url(#bgGrad)" filter="url(#shadow)" />
+
+  <!-- Notepad Sheet -->
+  <rect x="120" y="110" width="272" height="310" rx="28" fill="url(#noteGrad)" />
+
+  <!-- Folded corner / top badge -->
+  <path d="M 120 160 L 392 160" stroke="#FFE082" stroke-width="4" stroke-linecap="round" />
+
+  <!-- Keep Master Lightbulb / Crown Emblem -->
+  <!-- Bulb contour -->
+  <path d="M 256 180 C 220 180 190 208 190 244 C 190 268 204 288 224 300 L 224 330 C 224 336 228 340 234 340 L 278 340 C 284 340 288 336 288 330 L 288 300 C 308 288 322 268 322 244 C 322 208 292 180 256 180 Z" fill="#F57C00" />
+
+  <!-- Bulb glow inner -->
+  <circle cx="256" cy="244" r="32" fill="#FFEB3B" opacity="0.9" />
+
+  <!-- Filament / Spark -->
+  <path d="M 246 234 L 256 220 L 266 234 L 256 248 Z" fill="#E65100" />
+
+  <!-- Bulb base screw lines -->
+  <rect x="232" y="348" width="48" height="8" rx="4" fill="#FFA000" />
+  <rect x="238" y="360" width="36" height="6" rx="3" fill="#FF8F00" />
+
+  <!-- Checklist lines on bottom -->
+  <rect x="160" y="386" width="36" height="8" rx="4" fill="#FFA000" />
+  <rect x="210" y="386" width="140" height="8" rx="4" fill="#FFE082" />
+</svg>

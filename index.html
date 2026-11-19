@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>KEEP MASTER PRO</title>
+
+  <!-- PWA & Meta -->
+  <meta name="description" content="Application de notes moderne, rapide et hors-ligne inspirée de Google Keep avec Appwrite Cloud et IndexedDB.">
+  <meta name="theme-color" content="#FFB300">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Keep Master">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/svg+xml" href="./icons/favicon.svg">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="./css/theme.css">
+  <link rel="stylesheet" href="./css/main.css">
+  <link rel="stylesheet" href="./css/layout.css">
+  <link rel="stylesheet" href="./css/components.css">
+  <link rel="stylesheet" href="./css/responsive.css">
+</head>
+<body>
+  <div id="app">
+    <!-- =====================================================================
+         HEADER
+         ===================================================================== -->
+    <header class="header">
+      <div class="header-left">
+        <button id="sidebarToggleBtn" class="btn-icon" aria-label="Menu principal" title="Menu principal">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+        <div class="header-brand">
+          <img src="./icons/favicon.svg" alt="Keep Master Logo" class="header-brand-icon">
+          <span>KEEP MASTER <span style="color:var(--accent-primary); font-size:12px; font-weight:700;">PRO</span></span>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <div class="search-container">
+          <div class="search-input-wrapper">
+            <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="searchInput" class="search-input" placeholder="Rechercher dans vos notes, listes, libellés..." autocomplete="off">
+            <button id="searchClearBtn" class="btn-icon search-clear hidden" aria-label="Effacer la recherche">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+            <button id="filterToggleBtn" class="btn-icon search-filter-btn" aria-label="Filtres avancés" title="Filtres avancés">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <!-- Sync & Offline status badge -->
+        <div id="syncStatusBadge" class="sync-badge online" title="État de la synchronisation">
+          <span class="sync-dot"></span>
+          <span id="syncStatusText">Prêt</span>
+        </div>
+
+        <!-- Grid / List view toggle -->
+        <button id="viewToggleBtn" class="btn-icon" aria-label="Changer d'affichage" title="Affichage Grille / Liste">
+          <svg id="viewGridIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          <svg id="viewListIcon" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+        </button>
+
+        <!-- Dark / Light theme toggle -->
+        <button id="themeToggleBtn" class="btn-icon" aria-label="Changer de thème" title="Thème Clair / Sombre">
+          <svg id="themeMoonIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          <svg id="themeSunIcon" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        </button>
+
+        <!-- Settings button -->
+        <button id="settingsBtn" class="btn-icon" aria-label="Paramètres & Sauvegardes" title="Paramètres">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+
+        <!-- User profile / Auth button -->
+        <button id="authBtn" class="btn-icon" aria-label="Compte utilisateur" title="Connexion Appwrite">
+          <svg id="authLoggedOutIcon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          <div id="authUserAvatar" class="hidden" style="width:28px;height:28px;border-radius:50%;background:var(--accent-primary);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:12px;">U</div>
+        </button>
+      </div>
+    </header>
+
+    <!-- =====================================================================
+         MAIN BODY & SIDEBAR
+         ===================================================================== -->
+    <div class="app-body">
+      <!-- Sidebar -->
+      <aside id="sidebar" class="sidebar">
+        <nav class="sidebar-nav">
+          <div class="nav-item active" data-view="notes">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <span>Notes</span>
+          </div>
+
+          <div class="nav-item" data-view="reminders">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            <span>Rappels</span>
+          </div>
+
+          <div class="nav-divider"></div>
+
+          <!-- Dynamic Labels Section -->
+          <div class="nav-header">Libellés</div>
+          <div id="sidebarLabelsContainer"></div>
+
+          <div class="nav-item" id="sidebarEditLabelsBtn">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            <span>Modifier les libellés</span>
+          </div>
+
+          <div class="nav-divider"></div>
+
+          <div class="nav-item" data-view="archive">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
+            <span>Archives</span>
+          </div>
+
+          <div class="nav-item" data-view="trash">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+            <span>Corbeille</span>
+          </div>
+        </nav>
+      </aside>
+
+      <!-- Mobile drawer backdrop -->
+      <div id="mobileDrawerBackdrop" class="mobile-drawer-backdrop"></div>
+
+      <!-- Main Content Container -->
+      <main class="main-content">
+        <!-- Advanced Filter Bar (Displayed when active) -->
+        <div id="activeFiltersBar" class="hidden" style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+          <span style="font-size:13px;color:var(--text-secondary);font-weight:600;">Filtres actifs :</span>
+          <div id="activeFiltersChips" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+          <button id="clearFiltersBtn" class="btn-secondary" style="font-size:12px;padding:2px 8px;">Réinitialiser</button>
+        </div>
+
+        <!-- Note Creator (Google Keep expandable bar) -->
+        <div id="noteCreatorContainer" class="creator-container">
+          <div id="noteCreator" class="note-creator bg-default">
+            <!-- Collapsed state -->
+            <div id="creatorCollapsed" class="creator-collapsed">
+              <span class="creator-placeholder">Créer une note...</span>
+              <div class="creator-actions-collapsed">
+                <button id="quickListBtn" class="btn-icon" aria-label="Nouvelle liste" title="Nouvelle liste">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                </button>
+                <button id="quickDrawingBtn" class="btn-icon" aria-label="Nouveau dessin" title="Nouveau dessin">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>
+                </button>
+                <button id="quickImageBtn" class="btn-icon" aria-label="Ajouter une image" title="Ajouter une image">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                </button>
+                <button id="quickAudioBtn" class="btn-icon" aria-label="Note vocale" title="Note vocale">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Expanded state -->
+            <div id="creatorExpanded" class="creator-expanded hidden">
+              <div class="creator-header">
+                <input type="text" id="creatorTitle" class="note-title-input" placeholder="Titre" autocomplete="off">
+                <button id="creatorPinBtn" class="btn-icon" aria-label="Épingler" title="Épingler la note">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 2l6 6-7 7-4-4 5-5z"></path><path d="M2 22l7-7"></path><path d="M7 11l-4 4 4 4 4-4"></path></svg>
+                </button>
+              </div>
+
+              <!-- Text body or checklist -->
+              <textarea id="creatorContent" class="note-body-textarea" placeholder="Créer une note..."></textarea>
+              <div id="creatorChecklistContainer" class="checklist-container hidden"></div>
+
+              <!-- Attachments preview strip -->
+              <div id="creatorAttachments" class="creator-attachments"></div>
+
+              <!-- Chips strip (labels & reminder) -->
+              <div id="creatorChips" class="note-card-chips"></div>
+
+              <div class="creator-footer">
+                <div class="creator-tools">
+                  <button id="creatorReminderBtn" class="btn-icon" title="Rappel">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                  </button>
+                  <button id="creatorColorBtn" class="btn-icon" title="Couleur">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 0 20v-2a8 8 0 0 0 0-16V2z"></path></svg>
+                  </button>
+                  <button id="creatorImageBtn" class="btn-icon" title="Image">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                  </button>
+                  <button id="creatorDrawingBtn" class="btn-icon" title="Dessin">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>
+                  </button>
+                  <button id="creatorAudioBtn" class="btn-icon" title="Note vocale">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                  </button>
+                  <button id="creatorArchiveBtn" class="btn-icon" title="Archiver">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
+                  </button>
+                  <button id="creatorLabelsBtn" class="btn-icon" title="Libellés">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+                  </button>
+                </div>
+                <button id="creatorCloseBtn" class="btn-secondary" style="font-weight:600;">Fermer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hidden file input for image uploads -->
+        <input type="file" id="imageFileInput" accept="image/*" multiple class="hidden">
+
+        <!-- Pinned Notes Section -->
+        <section id="pinnedSection" class="hidden">
+          <div class="section-header">
+            <span>Épinglées</span>
+          </div>
+          <div id="pinnedNotesContainer" class="notes-container grid-view"></div>
+        </section>
+
+        <!-- Other Notes / Main Section -->
+        <section id="otherSection">
+          <div id="otherSectionHeader" class="section-header hidden">
+            <span>Autres</span>
+          </div>
+          <div id="otherNotesContainer" class="notes-container grid-view"></div>
+        </section>
+
+        <!-- Empty State Container -->
+        <div id="emptyState" class="empty-state hidden">
+          <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <div id="emptyStateTitle" class="empty-state-title">Aucune note ici</div>
+          <div id="emptyStateDesc" class="empty-state-desc">Les notes que vous ajoutez apparaîtront ici.</div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Modals & Overlays Root Container -->
+    <div id="modalsContainer"></div>
+
+    <!-- Toasts Notifications Container -->
+    <div id="toastContainer" class="toast-container"></div>
+  </div>
+
+  <!-- Main Application Entrypoint (ES Modules) -->
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

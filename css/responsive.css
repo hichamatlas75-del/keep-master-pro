@@ -1,0 +1,100 @@
+/**
+ * KEEP MASTER PRO - Responsive Mobile & Tablet Styles
+ */
+
+/* Mobile Bottom Navigation & Hamburger Drawer */
+.mobile-drawer-backdrop {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: calc(var(--z-sidebar) - 1);
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 0 var(--space-sm);
+    gap: var(--space-xs);
+  }
+
+  .header-left {
+    min-width: auto;
+  }
+
+  .header-brand span {
+    display: none;
+  }
+
+  .sync-badge span {
+    display: none;
+  }
+
+  .sync-badge {
+    padding: 6px;
+  }
+
+  /* Drawer Sidebar on Mobile */
+  .sidebar {
+    position: fixed;
+    top: 64px;
+    left: 0;
+    bottom: 0;
+    width: 280px !important;
+    z-index: var(--z-sidebar);
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar.open + .mobile-drawer-backdrop {
+    display: block;
+  }
+
+  .main-content {
+    padding: var(--space-md) var(--space-sm);
+  }
+
+  .creator-container {
+    margin-bottom: var(--space-md);
+  }
+
+  .note-creator {
+    border-radius: var(--radius-sm);
+  }
+
+  /* Mobile floating action bar */
+  .note-card-actions {
+    opacity: 1 !important; /* Always visible on mobile */
+  }
+
+  .note-pin-btn {
+    opacity: 1 !important;
+  }
+
+  /* Modal full-screen on mobile */
+  .modal-content {
+    max-height: 98vh;
+    border-radius: var(--radius-md);
+  }
+
+  .canvas-wrapper {
+    height: 280px;
+  }
+
+  .toast-container {
+    left: var(--space-sm);
+    right: var(--space-sm);
+    bottom: var(--space-sm);
+  }
+
+  .toast {
+    min-width: 0;
+    width: 100%;
+  }
+}

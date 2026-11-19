@@ -1,0 +1,24 @@
+{
+  "name": "keep-master-pro",
+  "version": "1.0.0",
+  "description": "Progressive Web App (PWA) de notes moderne, rapide et hors-ligne, inspirée de Google Keep, avec Appwrite Cloud et IndexedDB.",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "dev": "node scripts/serve.js",
+    "test": "node --test tests/*.test.js",
+    "generate-icons": "node scripts/generate-icons.js"
+  },
+  "keywords": [
+    "pwa",
+    "google-keep",
+    "notes",
+    "appwrite",
+    "offline-first",
+    "indexeddb",
+    "vanilla-js"
+  ],
+  "author": "KEEP MASTER PRO Team",
+  "license": "MIT",
+  "devDependencies": {}
+}
