@@ -1,5 +1,6 @@
 /**
  * KEEP MASTER PRO - Responsive Mobile & Tablet Styles
+ * Portrait Mobile Optimizations, Compact Header & Touch Friendly UI
  */
 
 /* Mobile Bottom Navigation & Hamburger Drawer */
@@ -10,22 +11,61 @@
   left: 0;
   width: 100vw;
   height: 100vh;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
   z-index: calc(var(--z-sidebar) - 1);
+  animation: fadeIn 150ms ease-out;
+}
+
+/* User Card in Sidebar */
+.sidebar-user-card:hover {
+  background-color: var(--bg-surface-hover) !important;
 }
 
 @media (max-width: 768px) {
   .header {
-    padding: 0 var(--space-sm);
-    gap: var(--space-xs);
+    height: 58px;
+    padding: 0 var(--space-xs);
+    gap: 6px;
   }
 
   .header-left {
     min-width: auto;
+    gap: 4px;
+    flex-shrink: 0;
   }
 
   .header-brand span {
     display: none;
+  }
+
+  .header-brand-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .header-center {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .search-input-wrapper {
+    padding: 4px 8px;
+    border-radius: var(--radius-pill);
+  }
+
+  .search-input {
+    font-size: 13px;
+    padding: 2px 4px;
+  }
+
+  .search-input::placeholder {
+    content: "Rechercher";
+  }
+
+  .header-right {
+    gap: 4px;
+    flex-shrink: 0;
   }
 
   .sync-badge span {
@@ -39,13 +79,15 @@
   /* Drawer Sidebar on Mobile */
   .sidebar {
     position: fixed;
-    top: 64px;
+    top: 0;
     left: 0;
     bottom: 0;
-    width: 280px !important;
+    width: 290px !important;
+    max-width: 82vw;
     z-index: var(--z-sidebar);
     transform: translateX(-100%);
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-modal);
+    padding-top: 16px;
   }
 
   .sidebar.open {
@@ -57,18 +99,18 @@
   }
 
   .main-content {
-    padding: var(--space-md) var(--space-sm);
+    padding: var(--space-sm) var(--space-xs);
   }
 
   .creator-container {
-    margin-bottom: var(--space-md);
+    margin-bottom: var(--space-sm);
   }
 
   .note-creator {
     border-radius: var(--radius-sm);
   }
 
-  /* Mobile floating action bar */
+  /* Note Cards on Mobile */
   .note-card-actions {
     opacity: 1 !important; /* Always visible on mobile */
   }
@@ -78,8 +120,12 @@
   }
 
   /* Modal full-screen on mobile */
+  .modal-backdrop {
+    padding: 6px;
+  }
+
   .modal-content {
-    max-height: 98vh;
+    max-height: 96vh;
     border-radius: var(--radius-md);
   }
 
@@ -88,13 +134,52 @@
   }
 
   .toast-container {
-    left: var(--space-sm);
-    right: var(--space-sm);
-    bottom: var(--space-sm);
+    left: var(--space-xs);
+    right: var(--space-xs);
+    bottom: var(--space-xs);
   }
 
   .toast {
     min-width: 0;
     width: 100%;
+  }
+}
+
+/* Portrait Phone Optimizations (width <= 560px) */
+@media (max-width: 560px) {
+  /* Hide non-essential buttons from the top bar so the auth button NEVER gets hidden! */
+  #viewToggleBtn,
+  #settingsBtn {
+    display: none !important;
+  }
+
+  /* Prominently size and show the Auth button at the top-right */
+  #authBtn {
+    display: inline-flex !important;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 5;
+  }
+
+  #authUserAvatar {
+    width: 30px !important;
+    height: 30px !important;
+    font-size: 13px !important;
+    box-shadow: 0 0 0 2px var(--accent-primary);
+  }
+
+  #themeToggleBtn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .search-filter-btn {
+    display: none !important;
+  }
+
+  .search-input-wrapper {
+    background-color: var(--bg-surface-variant);
   }
 }

@@ -49,7 +49,10 @@ export class AuthModal {
             <div>
               <div style="font-size:16px;font-weight:600;color:var(--text-primary);">${user?.name || 'Utilisateur'}</div>
               <div style="font-size:13px;color:var(--text-secondary);">${user?.email || ''}</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">ID: ${user?.$id}</div>
+              <div style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;color:var(--success-color);font-weight:500;">
+                <span style="width:6px;height:6px;border-radius:50%;background:var(--success-color);"></span>
+                Compte synchronisé
+              </div>
             </div>
             <button id="authLogoutBtn" class="btn-danger" style="width:100%;">Se déconnecter</button>
           </div>
@@ -70,15 +73,13 @@ export class AuthModal {
     this.modalEl.innerHTML = `
       <div class="modal-content" style="max-width: 440px;">
         <div class="modal-header">
-          <h3 class="modal-title">${isLogin ? 'Connexion Firebase' : 'Créer un compte'}</h3>
+          <h3 class="modal-title">${isLogin ? 'Connexion' : 'Créer un compte'}</h3>
           <button id="closeAuthModalBtn" class="btn-icon">×</button>
         </div>
         <div class="modal-body" style="gap:14px;">
-          ${!firebase.isConfigured ? `
-            <div style="background:var(--accent-subtle);color:var(--accent-text);padding:8px 12px;border-radius:6px;font-size:12px;">
-              ℹ️ Firebase n'est pas encore configuré. Renseignez votre API Key et Project ID dans les Paramètres pour activer la synchronisation multi-appareils.
-            </div>
-          ` : ''}
+          <p style="font-size:13px;color:var(--text-secondary);margin:0;line-height:1.5;">
+            ${isLogin ? 'Connectez-vous pour synchroniser vos notes en direct sur tous vos appareils.' : 'Créez votre compte en quelques secondes pour synchroniser vos notes.'}
+          </p>
 
           ${!isLogin ? `
             <div style="display:flex;flex-direction:column;gap:4px;">

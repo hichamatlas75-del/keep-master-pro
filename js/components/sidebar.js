@@ -14,6 +14,11 @@ export class Sidebar {
     this.backdrop = document.getElementById('mobileDrawerBackdrop');
     this.labelsContainer = document.getElementById('sidebarLabelsContainer');
     this.editLabelsBtn = document.getElementById('sidebarEditLabelsBtn');
+    this.userCard = document.getElementById('sidebarUserCard');
+    this.settingsBtn = document.getElementById('sidebarSettingsBtn');
+    this.userName = document.getElementById('sidebarUserName');
+    this.userEmail = document.getElementById('sidebarUserEmail');
+    this.userAvatar = document.getElementById('sidebarUserAvatar');
     this.currentView = 'notes';
     this.currentLabelId = null;
 
@@ -30,7 +35,23 @@ export class Sidebar {
       this.backdrop.onclick = () => this.closeMobileDrawer();
     }
 
-    // 2. Static navigation items (Notes, Reminders, Archive, Trash)
+    // 2. User account card click
+    if (this.userCard) {
+      this.userCard.onclick = () => {
+        eventBus.emit('modal:auth');
+        this.closeMobileDrawer();
+      };
+    }
+
+    // 3. Settings button in sidebar (mobile easy access)
+    if (this.settingsBtn) {
+      this.settingsBtn.onclick = () => {
+        eventBus.emit('modal:settings');
+        this.closeMobileDrawer();
+      };
+    }
+
+    // 4. Static navigation items (Notes, Reminders, Archive, Trash)
     this.sidebar.querySelectorAll('.nav-item[data-view]').forEach(item => {
       item.onclick = () => {
         const view = item.dataset.view;
@@ -39,7 +60,7 @@ export class Sidebar {
       };
     });
 
-    // 3. Edit labels button
+    // 5. Edit labels button
     if (this.editLabelsBtn) {
       this.editLabelsBtn.onclick = () => {
         eventBus.emit('modal:labels');
@@ -47,11 +68,29 @@ export class Sidebar {
       };
     }
 
-    // 4. Listen to labels change event
+    // 6. Listen to labels change and auth change
     eventBus.on('labels:changed', () => this.renderLabels());
+    eventBus.on('auth:change', ({ user, isGuest }) => {
+      this.updateUserCard(user, isGuest);
+    });
 
     // Initial render
     this.renderLabels();
+  }
+
+  updateUserCard(user, isGuest) {
+    if (!this.userName || !this.userEmail || !this.userAvatar) return;
+    if (!isGuest && user) {
+      this.userName.textContent = user.name || 'Utilisateur';
+      this.userEmail.textContent = user.email || 'Connecté à Firebase';
+      this.userAvatar.textContent = (user.name || user.email || 'U').charAt(0).toUpperCase();
+      this.userAvatar.style.background = 'var(--accent-primary)';
+    } else {
+      this.userName.textContent = 'Mon Compte';
+      this.userEmail.textContent = 'Mode local (Appuyez pour connecter)';
+      this.userAvatar.textContent = '👤';
+      this.userAvatar.style.background = 'var(--text-secondary)';
+    }
   }
 
   toggleSidebar() {

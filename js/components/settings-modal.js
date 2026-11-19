@@ -39,35 +39,54 @@ export class SettingsModal {
         </div>
 
         <div class="modal-body" style="gap:20px;">
-          <!-- 1. Firebase Cloud Configuration -->
+          <!-- 1. Cloud Synchronization Status -->
           <section style="display:flex;flex-direction:column;gap:10px;">
             <div style="font-weight:600;font-size:15px;color:var(--text-primary);display:flex;align-items:center;gap:8px;">
-              <span>🔥</span> <span>Connexion Firebase Cloud (Forfait Spark Gratuit)</span>
+              <span>☁️</span> <span>Synchronisation Cloud Sécurisée</span>
             </div>
-            <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;">
-              Synchronisez vos notes en temps réel sur tous vos appareils via Google Cloud Firestore et Firebase Auth.
-              (L'application reste 100% fonctionnelle hors-ligne en mode local).
-            </p>
-
-            <div style="display:flex;flex-direction:column;gap:8px;">
-              <label style="font-size:12px;font-weight:500;color:var(--text-secondary);">Firebase API Key :</label>
-              <input type="text" id="settingFirebaseApiKey" value="${savedConfig.API_KEY || ''}" placeholder="AIzaSy..." style="padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:13px;">
-
-              <label style="font-size:12px;font-weight:500;color:var(--text-secondary);">Project ID :</label>
-              <input type="text" id="settingFirebaseProjectId" value="${savedConfig.PROJECT_ID || 'keep-master-pro'}" placeholder="keep-master-pro" style="padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:13px;">
-
-              <label style="font-size:12px;font-weight:500;color:var(--text-secondary);">Auth Domain :</label>
-              <input type="text" id="settingFirebaseAuthDomain" value="${savedConfig.AUTH_DOMAIN || 'keep-master-pro.firebaseapp.com'}" placeholder="keep-master-pro.firebaseapp.com" style="padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:13px;">
-
-              <label style="font-size:12px;font-weight:500;color:var(--text-secondary);">App ID :</label>
-              <input type="text" id="settingFirebaseAppId" value="${savedConfig.APP_ID || ''}" placeholder="1:123456789012:web:abcdef..." style="padding:8px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:13px;">
+            
+            <div style="background:var(--bg-surface-variant);border-radius:var(--radius-sm);padding:12px;border:1px solid var(--border-color);display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-size:13px;font-weight:600;color:var(--text-primary);">État du service :</span>
+                <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--success-color);">
+                  <span style="width:8px;height:8px;border-radius:50%;background:var(--success-color);"></span>
+                  Actif & Prêt (KEEP MASTER PRO)
+                </span>
+              </div>
+              <p style="font-size:12px;color:var(--text-secondary);line-height:1.4;margin:0;">
+                Vos notes, listes et croquis sont synchronisés en direct sur tous vos appareils et protégés hors-ligne.
+              </p>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+                <button id="testFirebasePingBtn" class="btn-secondary" style="font-size:12px;padding:4px 10px;border:1px solid var(--border-color);">
+                  Vérifier la connexion
+                </button>
+                <div id="firebasePingResult" style="font-size:12px;font-weight:500;"></div>
+              </div>
             </div>
 
-            <div style="display:flex;gap:8px;margin-top:4px;">
-              <button id="saveFirebaseConfigBtn" class="btn-primary" style="font-size:13px;">Enregistrer la configuration</button>
-              <button id="testFirebasePingBtn" class="btn-secondary" style="font-size:13px;">Tester la connexion</button>
-            </div>
-            <div id="firebasePingResult" style="font-size:12px;font-weight:500;"></div>
+            <!-- Paramètres techniques masqués sous accordéon pour ne pas encombrer l'utilisateur -->
+            <details style="border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:8px 12px;background:transparent;">
+              <summary style="font-size:12px;color:var(--text-muted);cursor:pointer;user-select:none;font-weight:500;">
+                ⚙️ Paramètres techniques avancés (Masqués)
+              </summary>
+              <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border-light);">
+                <label style="font-size:11px;font-weight:500;color:var(--text-secondary);">Firebase API Key :</label>
+                <input type="password" id="settingFirebaseApiKey" value="${savedConfig.API_KEY || ''}" placeholder="AIzaSy..." style="padding:6px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:12px;">
+
+                <label style="font-size:11px;font-weight:500;color:var(--text-secondary);">Project ID :</label>
+                <input type="text" id="settingFirebaseProjectId" value="${savedConfig.PROJECT_ID || 'keep-master-pro'}" placeholder="keep-master-pro" style="padding:6px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:12px;">
+
+                <label style="font-size:11px;font-weight:500;color:var(--text-secondary);">Auth Domain :</label>
+                <input type="text" id="settingFirebaseAuthDomain" value="${savedConfig.AUTH_DOMAIN || 'keep-master-pro.firebaseapp.com'}" placeholder="keep-master-pro.firebaseapp.com" style="padding:6px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:12px;">
+
+                <label style="font-size:11px;font-weight:500;color:var(--text-secondary);">App ID :</label>
+                <input type="text" id="settingFirebaseAppId" value="${savedConfig.APP_ID || ''}" placeholder="1:123456789012:web:abcdef..." style="padding:6px;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-input);font-size:12px;">
+
+                <div style="display:flex;gap:8px;margin-top:4px;">
+                  <button id="saveFirebaseConfigBtn" class="btn-primary" style="font-size:12px;padding:4px 10px;">Enregistrer</button>
+                </div>
+              </div>
+            </details>
           </section>
 
           <hr style="border:none;border-top:1px solid var(--border-color);">
