@@ -88,6 +88,7 @@ export class LabelsModule {
       await db.saveNote(note);
       await syncQueue.enqueue('notes', 'UPDATE', note.$id, note);
       eventBus.emit('notes:changed', { action: 'label-attached', note });
+      eventBus.emit('sync:trigger');
     }
     return note;
   }
@@ -102,6 +103,7 @@ export class LabelsModule {
       await db.saveNote(note);
       await syncQueue.enqueue('notes', 'UPDATE', note.$id, note);
       eventBus.emit('notes:changed', { action: 'label-detached', note });
+      eventBus.emit('sync:trigger');
     }
     return note;
   }

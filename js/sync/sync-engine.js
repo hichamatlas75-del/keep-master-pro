@@ -20,6 +20,8 @@ import { deepClone } from '../utils/helpers.js';
 class SyncEngine {
   constructor() {
     this.isSyncing = false;
+    this.syncRequested = false;
+    this.syncDebounceTimer = null;
     this.realtimeUnsubscribe = null;
     this.syncInterval = null;
     this.status = APP_CONFIG.SYNC_STATUS.ONLINE;
@@ -45,8 +47,23 @@ class SyncEngine {
       this.unsubscribeRealtime();
     });
 
-    // Listen to manual sync triggers
-    eventBus.on('sync:trigger', () => this.syncNow());
+    // Listen to automatic sync triggers on any modification
+    eventBus.on('sync:trigger', () => this.triggerSync());
+
+    // Flush any pending sync when tab/app visibility changes or is closed
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          this.flushPendingSync();
+        }
+      });
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pagehide', () => {
+        this.flushPendingSync();
+      });
+    }
 
     // Listen to auth changes
     eventBus.on('auth:change', ({ isGuest }) => {
@@ -69,6 +86,32 @@ class SyncEngine {
     setTimeout(() => this.syncNow(), 1500);
   }
 
+  /**
+   * Systematic automatic sync trigger after modification.
+   * Debounces burst modifications (e.g. rapid typing / batch deletes) into a single batch,
+   * while guaranteeing that every modification is systematically synchronized.
+   */
+  triggerSync(delay = 100) {
+    if (this.syncDebounceTimer) {
+      clearTimeout(this.syncDebounceTimer);
+    }
+    this.syncDebounceTimer = setTimeout(() => {
+      this.syncDebounceTimer = null;
+      this.syncNow();
+    }, delay);
+  }
+
+  /**
+   * Immediately execute any pending debounced sync
+   */
+  flushPendingSync() {
+    if (this.syncDebounceTimer) {
+      clearTimeout(this.syncDebounceTimer);
+      this.syncDebounceTimer = null;
+    }
+    this.syncNow();
+  }
+
   updateStatus() {
     if (!navigator.onLine) {
       this.setStatus(APP_CONFIG.SYNC_STATUS.OFFLINE, 'Hors ligne');
@@ -88,7 +131,10 @@ class SyncEngine {
    * Main synchronization routine
    */
   async syncNow() {
-    if (this.isSyncing) return;
+    if (this.isSyncing) {
+      this.syncRequested = true;
+      return;
+    }
     if (!navigator.onLine) {
       this.setStatus(APP_CONFIG.SYNC_STATUS.OFFLINE, 'Hors ligne');
       return;
@@ -103,7 +149,7 @@ class SyncEngine {
     this.setStatus(APP_CONFIG.SYNC_STATUS.SYNCING, 'Synchronisation...');
 
     try {
-      // 1. Push pending local operations to Firestore via batched writes
+      // 1. Push pending local operations to Firestore via batched writes (drains all batches)
       await this.processSyncQueue();
 
       // 2. Pull remote changes with delta optimization
@@ -121,6 +167,10 @@ class SyncEngine {
       this.setStatus(APP_CONFIG.SYNC_STATUS.ONLINE, 'Mode hors-ligne actif');
     } finally {
       this.isSyncing = false;
+      if (this.syncRequested) {
+        this.syncRequested = false;
+        setTimeout(() => this.syncNow(), 50);
+      }
     }
   }
 
@@ -128,53 +178,62 @@ class SyncEngine {
    * Process pending sync queue using Firestore writeBatch (Quota & performance optimization)
    */
   async processSyncQueue() {
-    const operations = await syncQueue.getPendingOperations(40);
-    if (!operations || operations.length === 0) return;
+    const maxBatches = 10;
+    let batchCount = 0;
 
-    const { doc, writeBatch, setDoc, deleteDoc } = firebase.SDK.firestore;
-    const batch = writeBatch(firebase.firestore);
-    const preparedOps = [];
+    while (batchCount < maxBatches) {
+      batchCount++;
+      const operations = await syncQueue.getPendingOperations(40);
+      if (!operations || operations.length === 0) break;
 
-    for (const op of operations) {
-      try {
-        const docRef = doc(firebase.firestore, op.collection, op.documentId);
+      const { doc, writeBatch, setDoc, deleteDoc } = firebase.SDK.firestore;
+      const batch = writeBatch(firebase.firestore);
+      const preparedOps = [];
 
-        if (op.action === 'CREATE' || op.action === 'UPDATE') {
-          const payload = this.formatPayloadForFirestore(op.data);
-          batch.set(docRef, payload, { merge: true });
-          this.recentLocalWrites.set(op.documentId, Date.now());
-          preparedOps.push({ op, docRef, payload });
-        } else if (op.action === 'DELETE') {
-          batch.delete(docRef);
-          preparedOps.push({ op, docRef, payload: null });
+      for (const op of operations) {
+        try {
+          const docRef = doc(firebase.firestore, op.collection, op.documentId);
+
+          if (op.action === 'CREATE' || op.action === 'UPDATE') {
+            const payload = this.formatPayloadForFirestore(op.data, op.collection);
+            batch.set(docRef, payload, { merge: true });
+            this.recentLocalWrites.set(op.documentId, Date.now());
+            preparedOps.push({ op, docRef, payload });
+          } else if (op.action === 'DELETE') {
+            batch.delete(docRef);
+            preparedOps.push({ op, docRef, payload: null });
+          }
+        } catch (err) {
+          console.warn(`[SyncEngine] Erreur préparation batch pour ${op.documentId}:`, err);
         }
-      } catch (err) {
-        console.warn(`[SyncEngine] Erreur préparation batch pour ${op.documentId}:`, err);
       }
-    }
 
-    if (preparedOps.length > 0) {
-      try {
-        // Commit all batched operations in a single Firestore call!
-        await batch.commit();
-        for (const { op } of preparedOps) {
-          await syncQueue.remove(op.id);
-        }
-      } catch (batchErr) {
-        console.warn('[SyncEngine] Échec du batch Firestore, repli unitaire :', batchErr.message);
-        for (const { op, docRef, payload } of preparedOps) {
-          try {
-            if (op.action === 'CREATE' || op.action === 'UPDATE') {
-              await setDoc(docRef, payload, { merge: true });
-              this.recentLocalWrites.set(op.documentId, Date.now());
-            } else if (op.action === 'DELETE') {
-              await deleteDoc(docRef);
-            }
+      if (preparedOps.length > 0) {
+        try {
+          // Commit all batched operations in a single Firestore call!
+          await batch.commit();
+          for (const { op } of preparedOps) {
             await syncQueue.remove(op.id);
-          } catch (singleErr) {
-            console.warn(`[SyncEngine] Échec opération unitaire pour ${op.documentId}:`, singleErr.message);
+          }
+        } catch (batchErr) {
+          console.warn('[SyncEngine] Échec du batch Firestore, repli unitaire :', batchErr.message);
+          for (const { op, docRef, payload } of preparedOps) {
+            try {
+              if (op.action === 'CREATE' || op.action === 'UPDATE') {
+                await setDoc(docRef, payload, { merge: true });
+                this.recentLocalWrites.set(op.documentId, Date.now());
+              } else if (op.action === 'DELETE') {
+                await deleteDoc(docRef);
+              }
+              await syncQueue.remove(op.id);
+            } catch (singleErr) {
+              console.warn(`[SyncEngine] Échec opération unitaire pour ${op.documentId}:`, singleErr.message);
+              await syncQueue.remove(op.id);
+            }
           }
         }
+      } else {
+        break;
       }
     }
   }
@@ -182,9 +241,21 @@ class SyncEngine {
   /**
    * Format note data for Firestore (enforcing Spark 1MB doc limit safely)
    */
-  formatPayloadForFirestore(data) {
+  formatPayloadForFirestore(data, collection = 'notes') {
     if (!data) return {};
     const payload = deepClone(data);
+
+    if (collection === 'labels') {
+      payload.userId = auth.getUserId();
+      delete payload.updatedAt;
+      return payload;
+    }
+
+    if (collection === 'shares') {
+      payload.ownerId = payload.ownerId || auth.getUserId();
+      return payload;
+    }
+
     payload.userId = auth.getUserId();
     payload.updatedAt = payload.updatedAt || new Date().toISOString();
 

@@ -8,6 +8,7 @@ import { db } from '../database/indexeddb.js';
 import { syncQueue } from '../sync/sync-queue.js';
 import { createShareModel } from '../database/schema.js';
 import { APP_CONFIG } from '../config.js';
+import { eventBus } from '../utils/event-bus.js';
 
 export class ShareModule {
   /**
@@ -66,6 +67,7 @@ export class ShareModule {
 
     // Queue for Cloud Firestore sync
     await syncQueue.enqueue('shares', 'CREATE', share.$id, share);
+    eventBus.emit('sync:trigger');
 
     return share;
   }
