@@ -110,10 +110,19 @@ export class Header {
       this.authBtn.onclick = () => eventBus.emit('modal:auth');
     }
 
-    // 8. Sync status listener
+    // 8. Sync status listener & manual trigger on badge click
     eventBus.on('sync:status', ({ status, message }) => {
       this.updateSyncBadge(status, message);
     });
+
+    if (this.syncBadge) {
+      this.syncBadge.style.cursor = 'pointer';
+      this.syncBadge.title = 'Cliquer pour forcer la synchronisation';
+      this.syncBadge.onclick = () => {
+        eventBus.emit('sync:trigger');
+        Toast.show('Synchronisation manuelle déclenchée...');
+      };
+    }
 
     // 9. Auth change listener
     eventBus.on('auth:change', ({ user, isGuest }) => {

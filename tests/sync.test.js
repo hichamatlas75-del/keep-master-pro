@@ -135,4 +135,69 @@ describe('Systematic Automatic Sync Tests', () => {
     db.getDB = origGetDB;
     syncQueue.enqueue = origEnqueue;
   });
+
+  test('claimGuestNotes updates userId of local guest notes and enqueues sync', async () => {
+    const { auth } = await import('../js/services/auth.js');
+    const guestNotes = [
+      { $id: 'g-1', title: 'Note invitée', userId: 'guest', updatedAt: '2026-11-20T10:00:00Z' }
+    ];
+
+    const origGetAll = db.getAllNotes;
+    const origGetLabels = db.getLabels;
+    const origSave = db.saveNote;
+    const origEnqueue = syncQueue.enqueue;
+
+    let savedNote = null;
+    let enqueuedAction = null;
+
+    db.getAllNotes = async () => guestNotes;
+    db.getLabels = async () => [];
+    db.saveNote = async (n) => { savedNote = n; return n; };
+    syncQueue.enqueue = async (col, act, id, data) => {
+      enqueuedAction = { col, act, id, data };
+    };
+
+    await auth.claimGuestNotes('user-real-123');
+
+    assert.ok(savedNote, 'Guest note must be saved with new userId');
+    assert.equal(savedNote.userId, 'user-real-123');
+    assert.ok(enqueuedAction);
+    assert.equal(enqueuedAction.col, 'notes');
+    assert.equal(enqueuedAction.id, 'g-1');
+
+    db.getAllNotes = origGetAll;
+    db.getLabels = origGetLabels;
+    db.saveNote = origSave;
+    syncQueue.enqueue = origEnqueue;
+  });
+
+  test('syncEngine automatically activates subscribeRealtime on init when user is already logged in', async () => {
+    const { auth } = await import('../js/services/auth.js');
+    const { firebase } = await import('../js/services/firebase.js');
+
+    const origIsGuest = Object.getOwnPropertyDescriptor(auth, 'isGuest');
+    const origGetUserId = auth.getUserId;
+    const origIsConfigured = firebase.isConfigured;
+
+    // Simulate an already authenticated session on page load
+    Object.defineProperty(auth, 'isGuest', { value: false, configurable: true });
+    auth.getUserId = () => 'user-active-456';
+    firebase.isConfigured = true;
+
+    let realtimeSubscribed = false;
+    const origSubscribe = syncEngine.subscribeRealtime;
+    syncEngine.subscribeRealtime = () => {
+      realtimeSubscribed = true;
+    };
+
+    // Run init
+    await syncEngine.init();
+
+    assert.equal(realtimeSubscribed, true, 'Realtime listener must be subscribed on startup for authenticated user without requiring logout/login');
+
+    syncEngine.subscribeRealtime = origSubscribe;
+    if (origIsGuest) Object.defineProperty(auth, 'isGuest', origIsGuest);
+    auth.getUserId = origGetUserId;
+    firebase.isConfigured = origIsConfigured;
+  });
 });

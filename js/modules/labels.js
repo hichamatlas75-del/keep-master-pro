@@ -4,6 +4,7 @@
  */
 
 import { db } from '../database/indexeddb.js';
+import { auth } from '../services/auth.js';
 import { syncQueue } from '../sync/sync-queue.js';
 import { createLabelModel } from '../database/schema.js';
 import { sanitizeText } from '../utils/sanitize.js';
@@ -25,7 +26,12 @@ export class LabelsModule {
       throw new Error(`Le libellé "${cleanName}" existe déjà.`);
     }
 
-    const label = createLabelModel({ name: cleanName, color });
+    const uid = auth.getUserId();
+    const label = createLabelModel({
+      name: cleanName,
+      color,
+      userId: uid && uid !== 'guest' ? uid : 'guest'
+    });
     await db.saveLabel(label);
     await syncQueue.enqueue('labels', 'CREATE', label.$id, label);
 

@@ -85,5 +85,6 @@ export class RemindersModule {
     this._watcherInterval = setInterval(() => {
       this.checkPendingReminders();
     }, intervalMs);
+    if (this._watcherInterval?.unref) this._watcherInterval.unref();
   }
 }

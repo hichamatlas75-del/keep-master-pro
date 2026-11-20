@@ -4,6 +4,7 @@
  */
 
 import { db } from '../database/indexeddb.js';
+import { auth } from '../services/auth.js';
 import { syncQueue } from '../sync/sync-queue.js';
 import { createNoteModel } from '../database/schema.js';
 import { generateId, deepClone } from '../utils/helpers.js';
@@ -15,8 +16,10 @@ export class NotesModule {
    * Create a new note
    */
   static async createNote(data) {
+    const uid = auth.getUserId();
     const note = createNoteModel({
       ...data,
+      userId: (data.userId && data.userId !== 'guest') ? data.userId : (uid && uid !== 'guest' ? uid : 'guest'),
       $id: generateId(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -50,9 +53,11 @@ export class NotesModule {
       throw new Error(`Note ${noteId} introuvable.`);
     }
 
+    const uid = auth.getUserId();
     const updated = createNoteModel({
       ...existing,
       ...updates,
+      userId: (existing.userId && existing.userId !== 'guest') ? existing.userId : (uid && uid !== 'guest' ? uid : 'guest'),
       version: (Number(existing.version) || 1) + 1,
       updatedAt: new Date().toISOString()
     });

@@ -5,13 +5,32 @@
 
 import { firebase } from './firebase.js';
 import { db } from '../database/indexeddb.js';
+import { syncQueue } from '../sync/sync-queue.js';
 import { eventBus } from '../utils/event-bus.js';
 
 class AuthService {
   constructor() {
     this.currentUser = null;
-    this.isGuest = true;
+    this._isGuest = true;
     this.authUnsubscribe = null;
+  }
+
+  get isGuest() {
+    if (firebase.isConfigured && firebase.auth && firebase.auth.currentUser) {
+      return false;
+    }
+    return this._isGuest;
+  }
+
+  set isGuest(val) {
+    this._isGuest = Boolean(val);
+  }
+
+  getUserId() {
+    if (firebase.isConfigured && firebase.auth && firebase.auth.currentUser) {
+      return firebase.auth.currentUser.uid;
+    }
+    return this.currentUser ? this.currentUser.$id : 'guest';
   }
 
   async init() {
@@ -24,6 +43,7 @@ class AuthService {
     return new Promise((resolve) => {
       const { onAuthStateChanged } = firebase.SDK.auth;
 
+      let firstResolution = false;
       this.authUnsubscribe = onAuthStateChanged(firebase.auth, async (user) => {
         if (user) {
           this.currentUser = {
@@ -34,18 +54,63 @@ class AuthService {
           };
           this.isGuest = false;
           await db.setSetting('current_user_id', user.uid);
+          await this.claimGuestNotes(user.uid);
         } else {
           await this.setGuestUser();
         }
 
         eventBus.emit('auth:change', { user: this.currentUser, isGuest: this.isGuest });
         eventBus.emit('sync:trigger');
-        resolve(this.currentUser);
+
+        if (!firstResolution) {
+          firstResolution = true;
+          resolve(this.currentUser);
+        }
       }, (error) => {
         console.warn('[Auth] Erreur écoute état Firebase Auth :', error);
-        this.setGuestUser().then(() => resolve(this.currentUser));
+        this.setGuestUser().then(() => {
+          if (!firstResolution) {
+            firstResolution = true;
+            resolve(this.currentUser);
+          }
+        });
       });
     });
+  }
+
+  /**
+   * Migrate any guest notes and labels to the newly authenticated user account
+   */
+  async claimGuestNotes(userId) {
+    if (!userId || userId === 'guest') return;
+    try {
+      const allNotes = await db.getAllNotes();
+      let migrated = 0;
+      for (const note of allNotes) {
+        if (!note.userId || note.userId === 'guest' || note.userId.startsWith('guest_')) {
+          note.userId = userId;
+          note.updatedAt = new Date().toISOString();
+          await db.saveNote(note);
+          await syncQueue.enqueue('notes', 'CREATE', note.$id, note);
+          migrated++;
+        }
+      }
+
+      const allLabels = await db.getLabels();
+      for (const label of allLabels) {
+        if (!label.userId || label.userId === 'guest' || label.userId.startsWith('guest_')) {
+          label.userId = userId;
+          await db.saveLabel(label);
+          await syncQueue.enqueue('labels', 'CREATE', label.$id, label);
+        }
+      }
+
+      if (migrated > 0) {
+        console.log(`[Auth] ${migrated} note(s) locale(s) associées au compte utilisateur.`);
+      }
+    } catch (err) {
+      console.warn('[Auth] Erreur migration notes invitées :', err);
+    }
   }
 
   async setGuestUser() {
@@ -87,6 +152,7 @@ class AuthService {
     };
     this.isGuest = false;
     await db.setSetting('current_user_id', userCredential.user.uid);
+    await this.claimGuestNotes(userCredential.user.uid);
 
     eventBus.emit('auth:change', { user: this.currentUser, isGuest: false });
     eventBus.emit('sync:trigger');
@@ -113,6 +179,7 @@ class AuthService {
     };
     this.isGuest = false;
     await db.setSetting('current_user_id', userCredential.user.uid);
+    await this.claimGuestNotes(userCredential.user.uid);
 
     eventBus.emit('auth:change', { user: this.currentUser, isGuest: false });
     eventBus.emit('sync:trigger');
