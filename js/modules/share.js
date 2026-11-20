@@ -50,6 +50,72 @@ export class ShareModule {
   }
 
   /**
+   * Format note title, content, checklist and attachments text for copying or export
+   */
+  static formatNoteForCopy(note) {
+    if (!note) return '';
+    const parts = [];
+
+    if (note.title && note.title.trim()) {
+      parts.push(note.title.trim());
+    }
+
+    if (note.content && note.content.trim()) {
+      parts.push(note.content.trim());
+    }
+
+    if (note.type === 'checklist' && Array.isArray(note.checklist) && note.checklist.length > 0) {
+      const items = note.checklist
+        .filter(i => i && i.text && i.text.trim())
+        .map(i => `${i.completed ? '☑' : '☐'} ${i.text.trim()}`);
+      if (items.length > 0) {
+        parts.push(items.join('\n'));
+      }
+    }
+
+    if (Array.isArray(note.attachments)) {
+      const ocrParts = note.attachments
+        .filter(att => att && att.extractedText && (!note.content || !note.content.includes(att.extractedText)))
+        .map(att => `[Texte extrait (${att.name || 'Image'})] :\n${att.extractedText.trim()}`);
+      if (ocrParts.length > 0) {
+        parts.push(ocrParts.join('\n\n'));
+      }
+    }
+
+    return parts.join('\n\n');
+  }
+
+  /**
+   * Copy formatted note directly to the system clipboard
+   */
+  static async copyNote(note) {
+    const text = this.formatNoteForCopy(note);
+    if (!text) {
+      throw new Error('La note est vide.');
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return text;
+    }
+
+    // Fallback for document copy execCommand
+    if (typeof document !== 'undefined') {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+      return text;
+    }
+
+    return text;
+  }
+
+  /**
    * Create a collaboration share record
    */
   static async shareWithUser(noteId, targetUserIdOrEmail, permission = 'read') {

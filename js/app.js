@@ -66,8 +66,9 @@ class App {
     // 5. Initialize Sync Engine
     await syncEngine.init();
 
-    // 6. Check pending reminders
+    // 6. Check pending reminders & start watcher
     RemindersModule.checkPendingReminders();
+    RemindersModule.startReminderWatcher();
 
     // 7. Setup Application Event Listeners
     this.setupListeners();
@@ -118,6 +119,15 @@ class App {
       await this.handleNotesReorder(sourceId, targetId);
     });
 
+    // Direct open note modal
+    eventBus.on('note:open', async ({ noteId }) => {
+      if (!noteId) return;
+      const note = await db.getNote(noteId);
+      if (note && !note.trashed) {
+        this.noteEditor.openEditModal(note);
+      }
+    });
+
     // Window focus checks for reminders
     window.addEventListener('focus', () => {
       RemindersModule.checkPendingReminders();
@@ -127,6 +137,16 @@ class App {
   handleUrlActions() {
     const params = new URLSearchParams(window.location.search);
     const action = params.get('action');
+    const targetNoteId = params.get('note');
+
+    if (targetNoteId) {
+      setTimeout(async () => {
+        const note = await db.getNote(targetNoteId);
+        if (note && !note.trashed) {
+          this.noteEditor.openEditModal(note);
+        }
+      }, 350);
+    }
 
     if (action === 'new-note') {
       setTimeout(() => this.noteEditor.expandCreator('text'), 300);

@@ -5,13 +5,14 @@
 
 import { APP_CONFIG } from '../config.js';
 import { escapeHTML, sanitizeUrl } from '../utils/sanitize.js';
-import { formatDateTime } from '../utils/helpers.js';
+import { formatDateTime, toLocalDatetimeString } from '../utils/helpers.js';
 import { NotesModule } from '../modules/notes.js';
 import { ChecklistModule } from '../modules/checklist.js';
 import { RemindersModule } from '../modules/reminders.js';
 import { ArchiveModule } from '../modules/archive.js';
 import { TrashModule } from '../modules/trash.js';
 import { ShareModule } from '../modules/share.js';
+import { OCRModule } from '../modules/ocr.js';
 import { Toast } from './toast.js';
 import { Dialog } from './dialog.js';
 import { eventBus } from '../utils/event-bus.js';
@@ -391,7 +392,7 @@ export class NoteCard {
 
     const now = new Date();
     now.setHours(now.getHours() + 2);
-    const defaultTime = note.reminder?.date ? new Date(note.reminder.date).toISOString().slice(0, 16) : now.toISOString().slice(0, 16);
+    const defaultTime = note.reminder?.date ? toLocalDatetimeString(note.reminder.date) : toLocalDatetimeString(now);
 
     popover.innerHTML = `
       <div style="font-weight:600;font-size:13px;color:var(--text-primary);">Programmer un rappel</div>
@@ -497,7 +498,10 @@ export class NoteCard {
       animation: slideUp 120ms ease-out;
     `;
 
+    const hasImages = Array.isArray(note.attachments) && note.attachments.some(a => a?.type?.startsWith('image/') && a.url);
+
     const items = [
+      { text: 'Copier la note', icon: '📋', action: () => NoteCard.copyNoteToClipboard(note) },
       { text: note.archived ? 'Désarchiver' : 'Archiver', icon: note.archived ? '📤' : '📦', action: () => {
         NotesModule.toggleArchive(note.$id).then(() => {
           Toast.show(note.archived ? 'Note désarchivée' : 'Note archivée', {
@@ -512,6 +516,14 @@ export class NoteCard {
         if (r?.method === 'clipboard') Toast.show('Contenu copié dans le presse-papiers');
       }) }
     ];
+
+    if (hasImages) {
+      items.splice(1, 0, {
+        text: 'Extraire le texte (OCR)',
+        icon: '🔍',
+        action: () => NoteCard.extractOcrFromNote(note)
+      });
+    }
 
     items.forEach(it => {
       const btn = document.createElement('button');
@@ -545,5 +557,64 @@ export class NoteCard {
       }
     };
     setTimeout(() => document.addEventListener('click', closeHandler), 10);
+  }
+
+  /**
+   * Copy note content directly to system clipboard
+   */
+  static async copyNoteToClipboard(note) {
+    try {
+      await ShareModule.copyNote(note);
+      Toast.show('Note copiée dans le presse-papiers');
+    } catch (err) {
+      Toast.show(err.message || 'Impossible de copier la note.');
+    }
+  }
+
+  /**
+   * Run OCR text extraction on image attachments of note
+   */
+  static async extractOcrFromNote(note) {
+    const imgAtt = (note.attachments || []).find(a => a?.type?.startsWith('image/') && a.url);
+    if (!imgAtt) {
+      Toast.show('Aucune image exploitable trouvée sur cette note.');
+      return;
+    }
+
+    Toast.show('Analyse OCR en cours...', { duration: 3000 });
+    try {
+      const extracted = await OCRModule.extractText(imgAtt.url, (msg) => {
+        Toast.show(msg, { duration: 2500 });
+      });
+
+      if (!extracted) {
+        Toast.show('Aucun texte lisible détecté sur cette image.');
+        return;
+      }
+
+      imgAtt.extractedText = extracted;
+
+      const previewSnippet = extracted.length > 150 ? extracted.slice(0, 150) + '...' : extracted;
+      const shouldInsert = await Dialog.confirm({
+        title: 'Texte détecté par l\'OCR',
+        message: `Texte extrait :\n"${previewSnippet}"\n\nSouhaitez-vous insérer ce texte dans le corps de votre note ?`,
+        confirmText: 'Insérer dans la note',
+        cancelText: 'Garder pour la recherche'
+      });
+
+      let updatedContent = note.content || '';
+      if (shouldInsert) {
+        updatedContent = (updatedContent ? updatedContent + '\n\n' : '') + extracted;
+      }
+
+      await NotesModule.updateNote(note.$id, {
+        attachments: note.attachments,
+        content: updatedContent
+      });
+
+      Toast.show('Texte OCR extrait et enregistré !');
+    } catch (err) {
+      Toast.show(err.message || 'Impossible d\'analyser l\'image.');
+    }
   }
 }

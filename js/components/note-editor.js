@@ -7,7 +7,7 @@ import { NotesModule } from '../modules/notes.js';
 import { ChecklistModule } from '../modules/checklist.js';
 import { storage } from '../services/storage.js';
 import { APP_CONFIG } from '../config.js';
-import { debounce, deepClone } from '../utils/helpers.js';
+import { debounce, deepClone, toLocalDatetimeString } from '../utils/helpers.js';
 import { escapeHTML, sanitizeUrl } from '../utils/sanitize.js';
 import { eventBus } from '../utils/event-bus.js';
 import { db } from '../database/indexeddb.js';
@@ -212,7 +212,7 @@ export class NoteEditor {
       this.openReminderPicker(e.currentTarget, (reminder) => {
         this.currentNote.reminder = reminder;
         this.renderChips(this.chipsContainer, this.currentNote);
-      });
+      }, this.currentNote.reminder);
     });
 
     // Labels picker
@@ -569,6 +569,9 @@ export class NoteEditor {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
               `}
             </button>
+            <button id="modalCopyBtn" class="btn-icon" title="Copier la note">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
           </div>
           <button id="modalCloseBtn" class="btn-primary">Fermer</button>
         </div>
@@ -668,7 +671,7 @@ export class NoteEditor {
         editNote.reminder = reminder;
         this.renderChips(chipsCont, editNote);
         NotesModule.updateNote(editNote.$id, { reminder });
-      });
+      }, editNote.reminder);
     };
 
     // Labels in modal
@@ -692,6 +695,19 @@ export class NoteEditor {
       });
       this.modalBackdrop.remove();
       this.modalBackdrop = null;
+    };
+
+    // Copy note in modal
+    this.modalBackdrop.querySelector('#modalCopyBtn').onclick = async () => {
+      editNote.title = titleEl.value;
+      if (contentEl) editNote.content = contentEl.value;
+      try {
+        const { ShareModule } = await import('../modules/share.js');
+        await ShareModule.copyNote(editNote);
+        Toast.show('Note copiée dans le presse-papiers');
+      } catch (err) {
+        Toast.show(err.message || 'Impossible de copier la note.');
+      }
     };
 
     // Close button
@@ -737,7 +753,7 @@ export class NoteEditor {
     setTimeout(() => document.addEventListener('click', closeHandler), 10);
   }
 
-  openReminderPicker(triggerBtn, onSelect) {
+  openReminderPicker(triggerBtn, onSelect, initialReminder = null) {
     document.querySelectorAll('.reminder-picker-popover').forEach(p => p.remove());
 
     const popover = document.createElement('div');
@@ -760,17 +776,19 @@ export class NoteEditor {
 
     const now = new Date();
     now.setHours(now.getHours() + 2);
-    const defaultTime = now.toISOString().slice(0, 16);
+    const defaultTime = initialReminder?.date ? toLocalDatetimeString(initialReminder.date) : toLocalDatetimeString(now);
+    const repeatVal = initialReminder?.repeat || 'none';
 
     popover.innerHTML = `
       <div style="font-weight:600;font-size:13px;color:var(--text-primary);">Programmer un rappel</div>
       <input type="datetime-local" id="reminderDateInput" value="${defaultTime}" style="padding:6px;border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);background:var(--bg-input);">
       <select id="reminderRepeatSelect" style="padding:6px;border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);background:var(--bg-input);">
-        <option value="none">Ne pas répéter</option>
-        <option value="daily">Tous les jours</option>
-        <option value="weekly">Toutes les semaines</option>
+        <option value="none" ${repeatVal === 'none' ? 'selected' : ''}>Ne pas répéter</option>
+        <option value="daily" ${repeatVal === 'daily' ? 'selected' : ''}>Tous les jours</option>
+        <option value="weekly" ${repeatVal === 'weekly' ? 'selected' : ''}>Toutes les semaines</option>
       </select>
-      <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:4px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+        ${initialReminder ? `<button id="deleteReminderPickerBtn" class="btn-danger" style="padding:3px 8px;font-size:11px;">Supprimer</button>` : '<div></div>'}
         <button id="saveReminderBtn" class="btn-primary" style="padding:4px 10px;font-size:12px;">Enregistrer</button>
       </div>
     `;
@@ -788,6 +806,15 @@ export class NoteEditor {
       }
       popover.remove();
     };
+
+    const delBtn = popover.querySelector('#deleteReminderPickerBtn');
+    if (delBtn) {
+      delBtn.onclick = (e) => {
+        e.stopPropagation();
+        onSelect(null);
+        popover.remove();
+      };
+    }
 
     triggerBtn.parentElement.appendChild(popover);
     const closeHandler = (e) => {

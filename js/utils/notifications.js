@@ -20,7 +20,7 @@ class NotificationManager {
   }
 
   init() {
-    if ('Notification' in window) {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
       this.permission = Notification.permission;
     }
   }
@@ -29,7 +29,7 @@ class NotificationManager {
    * Request browser notification permission
    */
   async requestPermission() {
-    if (!('Notification' in window)) {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
       console.warn('[Notifications] L\'API Web Notification n\'est pas supportée sur ce navigateur.');
       return false;
     }
@@ -62,7 +62,7 @@ class NotificationManager {
       ...options
     };
 
-    if ('serviceWorker' in navigator) {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       try {
         const registration = await navigator.serviceWorker.ready;
         if (registration && 'showNotification' in registration) {
@@ -75,8 +75,11 @@ class NotificationManager {
     }
 
     try {
-      new Notification(title, defaultOptions);
-      return true;
+      if (typeof Notification !== 'undefined') {
+        new Notification(title, defaultOptions);
+        return true;
+      }
+      return false;
     } catch (e) {
       console.error('[Notifications] Impossible d\'afficher la notification :', e);
       return false;
@@ -84,10 +87,41 @@ class NotificationManager {
   }
 
   /**
+   * Play an in-app audio chime using the Web Audio API
+   */
+  playReminderChime() {
+    try {
+      if (typeof window === 'undefined') return;
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.type = 'sine';
+      // Pleasant melodic two-tone chime (D5 -> A5)
+      osc.frequency.setValueAtTime(587.33, now);
+      osc.frequency.setValueAtTime(880, now + 0.12);
+
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+      osc.start(now);
+      osc.stop(now + 0.6);
+    } catch (e) {
+      // Audio autoplay policy or AudioContext unavailable
+    }
+  }
+
+  /**
    * Schedule a reminder at a specific ISO date/time
    */
   scheduleReminder(note) {
-    if (!note || !note.reminder || !note.reminder.date) return;
+    if (!note || !note.reminder || !note.reminder.date || note.reminder.completed) return;
     const reminderDate = new Date(note.reminder.date);
     const now = new Date();
     const delay = reminderDate.getTime() - now.getTime();
@@ -120,18 +154,58 @@ class NotificationManager {
     const title = note.title || 'Rappel Keep Master';
     const body = note.content || (note.checklist?.length ? `${note.checklist.length} élément(s) dans la liste` : 'Vous avez un rappel programmé.');
 
+    // 1. Play in-app audio chime
+    this.playReminderChime();
+
+    // 2. Try native system notification
     await this.show(`🔔 ${title}`, {
       body,
       data: { noteId: note.$id }
     });
 
-    // Mark reminder as triggered in note, update UI and queue sync
-    if (note.reminder && !note.reminder.completed) {
+    // 3. Fallback & guarantee: In-app Toast alert with direct action to open note
+    try {
+      const { Toast } = await import('../components/toast.js');
+      const { eventBus } = await import('./event-bus.js');
+      Toast.show(`🔔 Rappel : ${title}`, {
+        duration: 8000,
+        actionText: 'Ouvrir',
+        onAction: () => {
+          eventBus.emit('note:open', { noteId: note.$id });
+        }
+      });
+    } catch (toastErr) {}
+
+    // 4. Update reminder status: Advance date if recurring (daily/weekly) or mark completed
+    if (note.reminder) {
+      const repeat = note.reminder.repeat || 'none';
+      let nextDate = null;
+      let completed = true;
+
+      if (repeat === 'daily') {
+        const d = new Date(note.reminder.date);
+        const now = new Date();
+        while (d.getTime() <= now.getTime()) {
+          d.setDate(d.getDate() + 1);
+        }
+        nextDate = d.toISOString();
+        completed = false;
+      } else if (repeat === 'weekly') {
+        const d = new Date(note.reminder.date);
+        const now = new Date();
+        while (d.getTime() <= now.getTime()) {
+          d.setDate(d.getDate() + 7);
+        }
+        nextDate = d.toISOString();
+        completed = false;
+      }
+
       import('../modules/notes.js').then(({ NotesModule }) => {
         NotesModule.updateNote(note.$id, {
           reminder: {
             ...note.reminder,
-            completed: true
+            date: nextDate || note.reminder.date,
+            completed
           }
         });
       }).catch((err) => console.warn('[Notifications] Erreur mise à jour rappel :', err));

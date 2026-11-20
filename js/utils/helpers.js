@@ -29,6 +29,21 @@ export function formatDateTime(isoString) {
 }
 
 /**
+ * Format date for HTML5 <input type="datetime-local"> using local device timezone
+ */
+export function toLocalDatetimeString(dateInput = null) {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  if (isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  const YYYY = d.getFullYear();
+  const MM = pad(d.getMonth() + 1);
+  const DD = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mm = pad(d.getMinutes());
+  return `${YYYY}-${MM}-${DD}T${hh}:${mm}`;
+}
+
+/**
  * Relative time description (e.g., "Il y a 5 min", "Hier", etc.)
  */
 export function formatRelativeTime(isoString) {

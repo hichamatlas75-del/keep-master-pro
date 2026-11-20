@@ -8,10 +8,17 @@ import { db } from '../database/indexeddb.js';
 import { notifications } from '../utils/notifications.js';
 
 export class RemindersModule {
+  static _watcherInterval = null;
+
   /**
    * Set reminder on a note
    */
   static async setReminder(noteId, isoDateTime, repeat = 'none') {
+    // Proactively request notification permission when setting a reminder
+    if (typeof window !== 'undefined') {
+      notifications.requestPermission().catch(() => {});
+    }
+
     return NotesModule.updateNote(noteId, {
       reminder: {
         date: isoDateTime,
@@ -68,5 +75,15 @@ export class RemindersModule {
         }
       }
     }
+  }
+
+  /**
+   * Periodic reminder watcher to ensure reminders fire even across long background sessions
+   */
+  static startReminderWatcher(intervalMs = 45000) {
+    if (this._watcherInterval) clearInterval(this._watcherInterval);
+    this._watcherInterval = setInterval(() => {
+      this.checkPendingReminders();
+    }, intervalMs);
   }
 }
