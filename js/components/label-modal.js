@@ -8,6 +8,7 @@ import { db } from '../database/indexeddb.js';
 import { escapeHTML } from '../utils/sanitize.js';
 import { eventBus } from '../utils/event-bus.js';
 import { Dialog } from './dialog.js';
+import { Toast } from './toast.js';
 
 export class LabelModal {
   constructor() {
@@ -120,7 +121,7 @@ export class LabelModal {
         input.value = '';
         refreshList();
       } catch (err) {
-        alert(err.message);
+        Toast.show(err.message);
       }
     };
 

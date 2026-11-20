@@ -12,6 +12,8 @@ import { escapeHTML, sanitizeUrl } from '../utils/sanitize.js';
 import { eventBus } from '../utils/event-bus.js';
 import { db } from '../database/indexeddb.js';
 import { Toast } from './toast.js';
+import { Dialog } from './dialog.js';
+import { OCRModule } from '../modules/ocr.js';
 
 export class NoteEditor {
   constructor() {
@@ -271,8 +273,10 @@ export class NoteEditor {
       item.className = 'attachment-preview-item';
 
       if (mime.startsWith('image/')) {
+        const hasText = Boolean(att.extractedText);
         item.innerHTML = `
           <img src="${sanitizeUrl(att.url)}" alt="${escapeHTML(att.name || 'Image')}">
+          <button class="attachment-ocr-btn" title="Extraire le texte de l'image (OCR)">🔍 ${hasText ? 'OCR ✓' : 'OCR'}</button>
           <button class="attachment-remove-btn" title="Supprimer">×</button>
         `;
       } else if (mime.startsWith('audio/')) {
@@ -288,6 +292,67 @@ export class NoteEditor {
           <div style="padding:10px;font-size:11px;text-align:center;">📎 ${escapeHTML(att?.name || 'Fichier')}</div>
           <button class="attachment-remove-btn" title="Supprimer">×</button>
         `;
+      }
+
+      const ocrBtn = item.querySelector('.attachment-ocr-btn');
+      if (ocrBtn) {
+        ocrBtn.onclick = async (e) => {
+          e.stopPropagation();
+          const origText = ocrBtn.innerHTML;
+          ocrBtn.textContent = '⏳ Analyse...';
+          ocrBtn.disabled = true;
+
+          try {
+            const extracted = await OCRModule.extractText(att.url, (msg) => {
+              ocrBtn.textContent = '⏳ ' + msg;
+            });
+
+            if (!extracted) {
+              Toast.show('Aucun texte lisible détecté sur cette image.');
+              return;
+            }
+
+            att.extractedText = extracted;
+
+            const previewSnippet = extracted.length > 180 ? extracted.slice(0, 180) + '...' : extracted;
+            const shouldInsert = await Dialog.confirm({
+              title: 'Texte détecté par l\'OCR',
+              message: `Texte extrait :\n"${previewSnippet}"\n\nSouhaitez-vous insérer ce texte dans le corps de votre note ?`,
+              confirmText: 'Insérer dans la note',
+              cancelText: 'Garder pour la recherche'
+            });
+
+            if (shouldInsert) {
+              if (this.contentInput && !this.expandedBox.classList.contains('hidden')) {
+                this.contentInput.value = (this.contentInput.value ? this.contentInput.value + '\n\n' : '') + extracted;
+                note.content = this.contentInput.value;
+              } else {
+                const modalTextarea = container.closest('.modal-content')?.querySelector('#modalNoteContent');
+                if (modalTextarea) {
+                  modalTextarea.value = (modalTextarea.value ? modalTextarea.value + '\n\n' : '') + extracted;
+                  note.content = modalTextarea.value;
+                } else {
+                  note.content = (note.content ? note.content + '\n\n' : '') + extracted;
+                }
+              }
+            }
+
+            if (note.$id) {
+              await NotesModule.updateNote(note.$id, {
+                attachments: note.attachments,
+                content: note.content
+              });
+            }
+
+            Toast.show('Texte extrait avec succès !');
+            this.renderAttachments(container, note);
+          } catch (err) {
+            Toast.show(err.message || 'Impossible d\'analyser l\'image.');
+          } finally {
+            ocrBtn.innerHTML = origText;
+            ocrBtn.disabled = false;
+          }
+        };
       }
 
       const removeBtn = item.querySelector('.attachment-remove-btn');
@@ -348,11 +413,49 @@ export class NoteEditor {
     note.checklist.forEach((item, index) => {
       const row = document.createElement('div');
       row.className = `checklist-item ${item.completed ? 'checked' : ''}`;
+      row.draggable = true;
+      row.dataset.index = index;
       row.innerHTML = `
+        <span class="checklist-drag-handle" title="Glisser pour réordonner" style="cursor:grab;color:var(--text-muted);user-select:none;padding:0 4px;font-size:14px;display:flex;align-items:center;">⋮⋮</span>
         <input type="checkbox" class="checklist-checkbox" ${item.completed ? 'checked' : ''}>
         <input type="text" class="checklist-text" value="${escapeHTML(item.text)}" placeholder="Élément de la liste">
         <button class="btn-icon checklist-delete-btn" style="width:24px;height:24px;">×</button>
       `;
+
+      // Drag & Drop reordering handlers
+      row.ondragstart = (e) => {
+        e.dataTransfer.setData('text/plain', String(index));
+        e.dataTransfer.effectAllowed = 'move';
+        row.classList.add('dragging');
+      };
+
+      row.ondragend = () => {
+        row.classList.remove('dragging');
+        container.querySelectorAll('.checklist-item').forEach(r => r.classList.remove('drag-over'));
+      };
+
+      row.ondragover = (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        row.classList.add('drag-over');
+      };
+
+      row.ondragleave = () => {
+        row.classList.remove('drag-over');
+      };
+
+      row.ondrop = (e) => {
+        e.preventDefault();
+        row.classList.remove('drag-over');
+        const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+        if (!isNaN(fromIdx) && fromIdx !== index) {
+          note.checklist = ChecklistModule.reorder(note.checklist, fromIdx, index);
+          if (note.$id) {
+            NotesModule.updateNote(note.$id, { checklist: note.checklist });
+          }
+          this.renderChecklist(container, note);
+        }
+      };
 
       const checkbox = row.querySelector('.checklist-checkbox');
       const textInput = row.querySelector('.checklist-text');
@@ -376,15 +479,14 @@ export class NoteEditor {
       textInput.onkeydown = (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
-          note.checklist = ChecklistModule.addItem(note.checklist, ' ');
+          note.checklist = ChecklistModule.addItem(note.checklist, '', true, index);
           if (note.$id) {
             NotesModule.updateNote(note.$id, { checklist: note.checklist });
           }
           this.renderChecklist(container, note);
-          // Focus last created item
           setTimeout(() => {
             const inputs = container.querySelectorAll('.checklist-text');
-            inputs[inputs.length - 1]?.focus();
+            inputs[index + 1]?.focus();
           }, 10);
         }
       };
@@ -405,7 +507,7 @@ export class NoteEditor {
     addRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;color:var(--text-muted);cursor:pointer;font-size:13px;';
     addRow.innerHTML = `<span>+</span> <span>Ajouter un élément</span>`;
     addRow.onclick = () => {
-      note.checklist.push({ id: Date.now().toString(36), text: '', completed: false });
+      note.checklist = ChecklistModule.addItem(note.checklist, '', true);
       if (note.$id) {
         NotesModule.updateNote(note.$id, { checklist: note.checklist });
       }

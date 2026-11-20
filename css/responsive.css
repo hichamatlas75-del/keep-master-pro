@@ -86,7 +86,7 @@
     flex-shrink: 0;
   }
 
-  .sync-badge span {
+  .sync-badge #syncStatusText {
     display: none;
   }
 

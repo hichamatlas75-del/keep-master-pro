@@ -161,8 +161,24 @@
   width: 72px;
 }
 
-.sidebar.collapsed .nav-item span {
+.sidebar.collapsed .nav-item span,
+.sidebar.collapsed .sidebar-user-info,
+.sidebar.collapsed .nav-header {
   display: none;
+}
+
+.sidebar.collapsed .sidebar-user-card {
+  padding: 8px !important;
+  margin: 0 8px 8px 8px !important;
+  justify-content: center !important;
+}
+
+.sidebar.collapsed .nav-item {
+  padding: var(--space-sm) 0;
+  justify-content: center;
+  margin-right: 0;
+  margin: 2px 8px;
+  border-radius: var(--radius-pill);
 }
 
 .sidebar-nav {

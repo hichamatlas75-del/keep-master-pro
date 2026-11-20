@@ -59,15 +59,18 @@ export class SearchModule {
         return false;
       }
 
-      // 6. Text query search (matches title, content, checklist items)
+      // 6. Text query search (matches title, content, checklist items, and OCR extracted text from images/drawings)
       if (normalizedQuery) {
         const titleMatch = this.normalize(note.title).includes(normalizedQuery);
         const contentMatch = this.normalize(note.content).includes(normalizedQuery);
         const checklistMatch = Array.isArray(note.checklist) && note.checklist.some(
           item => this.normalize(item.text).includes(normalizedQuery)
         );
+        const ocrMatch = Array.isArray(note.attachments) && note.attachments.some(
+          att => att && att.extractedText && this.normalize(att.extractedText).includes(normalizedQuery)
+        );
 
-        if (!titleMatch && !contentMatch && !checklistMatch) {
+        if (!titleMatch && !contentMatch && !checklistMatch && !ocrMatch) {
           return false;
         }
       }

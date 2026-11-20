@@ -9,6 +9,7 @@ import { BackupEngine } from '../database/backup.js';
 import { syncEngine } from '../sync/sync-engine.js';
 import { syncQueue } from '../sync/sync-queue.js';
 import { Toast } from './toast.js';
+import { escapeHTML } from '../utils/sanitize.js';
 import { eventBus } from '../utils/event-bus.js';
 
 export class SettingsModal {
@@ -207,12 +208,12 @@ export class SettingsModal {
           • Notes mises à jour : <strong>${report.updatedNotes}</strong><br>
           • Notes ignorées (doublons ou antérieures) : <strong>${report.skippedNotes}</strong><br>
           • Libellés importés : <strong>${report.importedLabels}</strong>
-          ${report.errors.length > 0 ? `<br><span style="color:var(--danger-color);">• Avertissements : ${report.errors.join(', ')}</span>` : ''}
+          ${report.errors.length > 0 ? `<br><span style="color:var(--danger-color);">• Avertissements : ${report.errors.map(e => escapeHTML(e)).join(', ')}</span>` : ''}
         `;
         Toast.show('Restauration des données réussie !');
       } catch (err) {
         reportBox.classList.remove('hidden');
-        reportBox.innerHTML = `<span style="color:var(--danger-color);">Erreur : ${err.message}</span>`;
+        reportBox.innerHTML = `<span style="color:var(--danger-color);">Erreur : ${escapeHTML(err.message)}</span>`;
       }
       fileInput.value = '';
     };

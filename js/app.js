@@ -8,6 +8,8 @@ import { auth } from './services/auth.js';
 import { syncEngine } from './sync/sync-engine.js';
 import { RemindersModule } from './modules/reminders.js';
 import { SearchModule } from './modules/search.js';
+import { NotesModule } from './modules/notes.js';
+import { TrashModule } from './modules/trash.js';
 import { NoteCard } from './components/note-card.js';
 import { NoteEditor } from './components/note-editor.js';
 import { Header } from './components/header.js';
@@ -17,6 +19,8 @@ import { AudioModal } from './components/audio-modal.js';
 import { LabelModal } from './components/label-modal.js';
 import { SettingsModal } from './components/settings-modal.js';
 import { AuthModal } from './components/auth-modal.js';
+import { Dialog } from './components/dialog.js';
+import { Toast } from './components/toast.js';
 import { eventBus } from './utils/event-bus.js';
 
 class App {
@@ -109,6 +113,11 @@ class App {
       this.render();
     });
 
+    // Reorder notes via drag & drop
+    eventBus.on('notes:reorder', async ({ sourceId, targetId }) => {
+      await this.handleNotesReorder(sourceId, targetId);
+    });
+
     // Window focus checks for reminders
     window.addEventListener('focus', () => {
       RemindersModule.checkPendingReminders();
@@ -133,12 +142,58 @@ class App {
     }
   }
 
+  async handleNotesReorder(sourceId, targetId) {
+    if (!sourceId || !targetId || sourceId === targetId) return;
+
+    const allNotes = await db.getAllNotes();
+    const customOrder = (await db.getSetting('notes_custom_order')) || [];
+    const sourceNote = allNotes.find(n => n.$id === sourceId);
+    const targetNote = allNotes.find(n => n.$id === targetId);
+
+    if (!sourceNote || !targetNote) return;
+
+    // Adapt pin status if dropped between pinned and unpinned
+    if (sourceNote.pinned !== targetNote.pinned) {
+      await NotesModule.updateNote(sourceId, { pinned: targetNote.pinned });
+    }
+
+    const currentOrder = allNotes.map(n => n.$id);
+    const existingOrder = Array.isArray(customOrder) && customOrder.length > 0
+      ? [...new Set([...customOrder, ...currentOrder])]
+      : currentOrder;
+
+    const fromIdx = existingOrder.indexOf(sourceId);
+    const toIdx = existingOrder.indexOf(targetId);
+
+    if (fromIdx !== -1 && toIdx !== -1) {
+      existingOrder.splice(fromIdx, 1);
+      existingOrder.splice(toIdx, 0, sourceId);
+      await db.setSetting('notes_custom_order', existingOrder);
+      await this.render();
+      Toast.show('Notes réorganisées');
+    }
+  }
+
   async render() {
     const allNotes = await db.getAllNotes();
     const allLabels = await db.getLabels();
 
-    // Adjust visibility of Note Creator (only visible in main 'notes' view without search)
-    if (this.currentView === 'notes' && !this.searchQuery) {
+    // Apply custom user drag & drop ordering if present
+    const customOrder = (await db.getSetting('notes_custom_order')) || [];
+    if (Array.isArray(customOrder) && customOrder.length > 0) {
+      const orderMap = new Map(customOrder.map((id, idx) => [id, idx]));
+      allNotes.sort((a, b) => {
+        const idxA = orderMap.has(a.$id) ? orderMap.get(a.$id) : 999999;
+        const idxB = orderMap.has(b.$id) ? orderMap.get(b.$id) : 999999;
+        if (idxA !== idxB) return idxA - idxB;
+        return new Date(b.updatedAt) - new Date(a.updatedAt);
+      });
+    }
+
+    const isSearching = Boolean(this.searchQuery || this.searchFilters.color || this.searchFilters.type);
+
+    // Adjust visibility of Note Creator (only visible in main 'notes' view without search or filters)
+    if (this.currentView === 'notes' && !isSearching) {
       this.noteCreatorContainer?.classList.remove('hidden');
     } else {
       this.noteCreatorContainer?.classList.add('hidden');
@@ -170,6 +225,33 @@ class App {
     this.pinnedNotesContainer.innerHTML = '';
     this.otherNotesContainer.innerHTML = '';
 
+    // Render Empty Trash Action Bar if in trash view
+    const existingTrashBanner = document.getElementById('trashActionBar');
+    if (existingTrashBanner) existingTrashBanner.remove();
+
+    if (this.currentView === 'trash' && filteredNotes.length > 0) {
+      const trashBanner = document.createElement('div');
+      trashBanner.id = 'trashActionBar';
+      trashBanner.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:var(--bg-surface-variant);padding:10px 16px;border-radius:var(--radius-sm);margin-bottom:16px;border:1px solid var(--border-color);gap:12px;flex-wrap:wrap;';
+      trashBanner.innerHTML = `
+        <span style="font-size:13px;color:var(--text-secondary);font-style:italic;">Les notes dans la corbeille peuvent être restaurées ou effacées définitivement.</span>
+        <button id="emptyTrashBtn" class="btn-danger" style="font-size:12px;padding:4px 12px;white-space:nowrap;">Vider la corbeille</button>
+      `;
+      trashBanner.querySelector('#emptyTrashBtn').onclick = async () => {
+        const confirmed = await Dialog.confirm({
+          title: 'Vider la corbeille ?',
+          message: 'Toutes les notes de la corbeille seront définitivement effacées. Cette action est irréversible.',
+          confirmText: 'Vider',
+          isDanger: true
+        });
+        if (confirmed) {
+          await TrashModule.emptyTrash();
+          Toast.show('Corbeille vidée');
+        }
+      };
+      this.otherSection.parentElement.insertBefore(trashBanner, this.otherSection);
+    }
+
     if (filteredNotes.length === 0) {
       this.pinnedSection.classList.add('hidden');
       this.otherSection.classList.add('hidden');
@@ -180,8 +262,8 @@ class App {
     this.emptyState.classList.add('hidden');
     this.otherSection.classList.remove('hidden');
 
-    // Separate Pinned & Others if in main 'notes' view
-    if (this.currentView === 'notes' && !this.searchQuery) {
+    // Separate Pinned & Others if in main 'notes' view without search/filters
+    if (this.currentView === 'notes' && !isSearching) {
       const pinnedNotes = filteredNotes.filter(n => n.pinned);
       const otherNotes = filteredNotes.filter(n => !n.pinned);
 
@@ -214,9 +296,12 @@ class App {
   showEmptyState() {
     this.emptyState.classList.remove('hidden');
 
-    if (this.searchQuery) {
+    const isSearching = Boolean(this.searchQuery || this.searchFilters.color || this.searchFilters.type);
+    if (isSearching) {
       this.emptyStateTitle.textContent = 'Aucun résultat trouvé';
-      this.emptyStateDesc.textContent = `Aucune note ne correspond à "${this.searchQuery}".`;
+      this.emptyStateDesc.textContent = this.searchQuery
+        ? `Aucune note ne correspond à "${this.searchQuery}".`
+        : 'Aucune note ne correspond aux filtres sélectionnés.';
     } else if (this.currentView === 'reminders') {
       this.emptyStateTitle.textContent = 'Aucun rappel';
       this.emptyStateDesc.textContent = 'Les notes avec des rappels apparaîtront ici.';

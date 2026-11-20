@@ -116,65 +116,124 @@ export function dataURLToBlob(dataURL) {
   return new Blob([uInt8Array], { type: contentType });
 }
 
+let compressorWorker = null;
+
+function getCompressorWorker() {
+  if (typeof window === 'undefined' || typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined') {
+    return null;
+  }
+  if (!compressorWorker) {
+    try {
+      compressorWorker = new Worker(new URL('../workers/image-compressor.worker.js', import.meta.url), { type: 'module' });
+    } catch (_) {
+      try {
+        compressorWorker = new Worker('./js/workers/image-compressor.worker.js');
+      } catch (e) {
+        compressorWorker = null;
+      }
+    }
+  }
+  return compressorWorker;
+}
+
 /**
- * Compress and resize an image blob to fit safely within Spark free plan limits
- * Prevents exceeding Firestore 1MB document limit.
+ * Compress and resize an image blob off the main UI thread via Web Worker
+ * with main-thread HTMLCanvas fallback.
+ * Prevents exceeding Firestore 1MB document limit and eliminates UI stutter.
  */
 export async function compressImage(fileOrBlob, maxWidth = 1280, maxHeight = 1280, quality = 0.82) {
-  if (typeof window === 'undefined' || typeof document === 'undefined' || typeof Image === 'undefined') {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
     return fileOrBlob;
   }
   if (!fileOrBlob || !fileOrBlob.type || !fileOrBlob.type.startsWith('image/') || fileOrBlob.type === 'image/gif' || fileOrBlob.type === 'image/svg+xml') {
     return fileOrBlob;
   }
 
-  return new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(fileOrBlob);
+  // Fallback function using main-thread Canvas
+  const fallbackMainThread = () => {
+    if (typeof Image === 'undefined') return Promise.resolve(fileOrBlob);
 
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let { width, height } = img;
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(fileOrBlob);
 
-      if (width <= maxWidth && height <= maxHeight && fileOrBlob.size < 400 * 1024) {
-        return resolve(fileOrBlob);
-      }
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let { width, height } = img;
 
-      // Calculate constrained aspect ratio
-      if (width > height) {
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
+        if (width <= maxWidth && height <= maxHeight && fileOrBlob.size < 400 * 1024) {
+          return resolve(fileOrBlob);
         }
-      } else {
-        if (height > maxHeight) {
-          width = Math.round((width * maxHeight) / height);
-          height = maxHeight;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
         }
-      }
 
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, width, height);
-      ctx.drawImage(img, 0, 0, width, height);
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
 
-      canvas.toBlob(
-        (blob) => {
-          resolve(blob || fileOrBlob);
-        },
-        'image/jpeg',
-        quality
-      );
-    };
+        canvas.toBlob(
+          (blob) => {
+            resolve(blob || fileOrBlob);
+          },
+          'image/jpeg',
+          quality
+        );
+      };
 
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(fileOrBlob);
-    };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(fileOrBlob);
+      };
 
-    img.src = url;
-  });
+      img.src = url;
+    });
+  };
+
+  // 1. Try OffscreenCanvas background Web Worker
+  const worker = getCompressorWorker();
+  if (worker) {
+    return new Promise((resolve) => {
+      const id = 'comp_' + Math.random().toString(36).substring(2, 9);
+      const timeout = setTimeout(() => {
+        cleanup();
+        fallbackMainThread().then(resolve);
+      }, 5000);
+
+      const handler = (e) => {
+        if (e.data && e.data.id === id) {
+          cleanup();
+          if (e.data.success && e.data.blob) {
+            resolve(e.data.blob);
+          } else {
+            fallbackMainThread().then(resolve);
+          }
+        }
+      };
+
+      const cleanup = () => {
+        clearTimeout(timeout);
+        worker.removeEventListener('message', handler);
+      };
+
+      worker.addEventListener('message', handler);
+      worker.postMessage({ id, blob: fileOrBlob, maxWidth, maxHeight, quality });
+    });
+  }
+
+  // 2. Fallback to main-thread canvas
+  return fallbackMainThread();
 }

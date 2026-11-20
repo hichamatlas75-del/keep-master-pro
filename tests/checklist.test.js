@@ -13,6 +13,21 @@ describe('Checklist Module Tests', () => {
     assert.ok(updated[0].id);
   });
 
+  test('addItem should allow adding empty item when allowEmpty is true and insert after specified index', () => {
+    const list = [
+      { id: '1', text: 'Première tâche', completed: false },
+      { id: '2', text: 'Deuxième tâche', completed: false }
+    ];
+    // Insert new item between 1 and 2
+    const updated = ChecklistModule.addItem(list, '', true, 0);
+
+    assert.equal(updated.length, 3);
+    assert.equal(updated[0].id, '1');
+    assert.equal(updated[1].text, '');
+    assert.equal(updated[1].completed, false);
+    assert.equal(updated[2].id, '2');
+  });
+
   test('toggleItem should flip completed flag and move item to bottom', () => {
     const list = [
       { id: '1', text: 'Tâche 1', completed: false },

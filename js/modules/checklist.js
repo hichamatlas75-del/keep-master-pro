@@ -9,10 +9,14 @@ import { sanitizeText } from '../utils/sanitize.js';
 export class ChecklistModule {
   /**
    * Add a new item to checklist
+   * @param {Array} checklist
+   * @param {string} text
+   * @param {boolean} [allowEmpty=false]
+   * @param {number|null} [insertAfterIndex=null]
    */
-  static addItem(checklist, text) {
+  static addItem(checklist, text = '', allowEmpty = false, insertAfterIndex = null) {
     const cleanText = sanitizeText(text);
-    if (!cleanText) return checklist;
+    if (!cleanText && !allowEmpty) return checklist;
 
     const list = deepClone(checklist || []);
     const newItem = {
@@ -20,6 +24,11 @@ export class ChecklistModule {
       text: cleanText,
       completed: false
     };
+
+    if (insertAfterIndex !== null && insertAfterIndex !== undefined && insertAfterIndex >= 0 && insertAfterIndex < list.length) {
+      list.splice(insertAfterIndex + 1, 0, newItem);
+      return list;
+    }
 
     // Insert before first completed item if any
     const firstCompletedIndex = list.findIndex(i => i.completed);

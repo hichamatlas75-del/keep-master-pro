@@ -22,6 +22,7 @@ const STATIC_ASSETS = [
   './css/main.css',
   './js/config.js',
   './js/app.js',
+  './js/workers/image-compressor.worker.js',
   './js/utils/event-bus.js',
   './js/utils/helpers.js',
   './js/utils/sanitize.js',
@@ -42,6 +43,7 @@ const STATIC_ASSETS = [
   './js/modules/search.js',
   './js/modules/drawing.js',
   './js/modules/audio.js',
+  './js/modules/ocr.js',
   './js/modules/archive.js',
   './js/modules/trash.js',
   './js/modules/share.js',
@@ -122,11 +124,14 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => {
+        .catch(async (fetchErr) => {
           // If offline and requesting an HTML navigation, return cached index.html
-          if (event.request.headers.get('accept')?.includes('text/html')) {
-            return caches.match('./index.html');
+          if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
+            const fallback = await caches.match('./index.html');
+            if (fallback) return fallback;
           }
+          if (cachedResponse) return cachedResponse;
+          throw fetchErr;
         });
 
       return cachedResponse || fetchPromise;

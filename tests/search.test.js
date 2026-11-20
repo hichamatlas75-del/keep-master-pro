@@ -115,4 +115,38 @@ describe('Search & Filter Engine Tests', () => {
     const results = SearchModule.search(mediaNotes, { type: 'audio' });
     assert.deepEqual(results.map(n => n.$id), ['a1', 'a2', 'a3']);
   });
+
+  test('search should match keywords recognized by OCR inside attachments', () => {
+    const ocrNotes = [
+      {
+        $id: 'o1',
+        title: 'Tableau blanc',
+        content: '',
+        type: 'drawing',
+        attachments: [{ kind: 'drawing', name: 'schema.png', extractedText: 'Architecture Microservices Docker' }]
+      },
+      {
+        $id: 'o2',
+        title: 'Facture',
+        content: '',
+        type: 'text',
+        attachments: [{ type: 'image/jpeg', name: 'facture.jpg', extractedText: 'Total TTC 150 euros' }]
+      },
+      {
+        $id: 'o3',
+        title: 'Autre note',
+        content: 'Rien a voir',
+        type: 'text',
+        attachments: []
+      }
+    ];
+
+    const results = SearchModule.search(ocrNotes, { query: 'microservices' });
+    assert.equal(results.length, 1);
+    assert.equal(results[0].$id, 'o1');
+
+    const invoiceResults = SearchModule.search(ocrNotes, { query: 'total ttc' });
+    assert.equal(invoiceResults.length, 1);
+    assert.equal(invoiceResults[0].$id, 'o2');
+  });
 });

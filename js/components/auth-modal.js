@@ -183,6 +183,17 @@ export class AuthModal {
         submitBtn.textContent = isLogin ? 'Se connecter' : 'Créer le compte';
       }
     };
+
+    const handleEnterKey = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitBtn.click();
+      }
+    };
+
+    this.modalEl.querySelector('#authEmailInput')?.addEventListener('keydown', handleEnterKey);
+    this.modalEl.querySelector('#authPasswordInput')?.addEventListener('keydown', handleEnterKey);
+    this.modalEl.querySelector('#authNameInput')?.addEventListener('keydown', handleEnterKey);
   }
 
   close() {

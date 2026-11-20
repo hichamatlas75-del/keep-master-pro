@@ -24,6 +24,9 @@ export class Header {
     this.authBtn = document.getElementById('authBtn');
     this.syncBadge = document.getElementById('syncStatusBadge');
     this.syncText = document.getElementById('syncStatusText');
+    this.activeFiltersBar = document.getElementById('activeFiltersBar');
+    this.activeFiltersChips = document.getElementById('activeFiltersChips');
+    this.clearFiltersBtn = document.getElementById('clearFiltersBtn');
 
     this.currentViewMode = 'grid'; // 'grid' | 'list'
     this.currentTheme = 'dark';
@@ -71,6 +74,15 @@ export class Header {
       this.filterToggleBtn.onclick = (e) => {
         e.stopPropagation();
         this.openFilterPopover(e.currentTarget);
+      };
+    }
+
+    if (this.clearFiltersBtn) {
+      this.clearFiltersBtn.onclick = () => {
+        this.activeFilters.type = null;
+        this.activeFilters.color = null;
+        this.renderActiveFiltersBar();
+        eventBus.emit('search:query', { query: this.searchInput?.value.trim() || '', ...this.activeFilters });
       };
     }
 
@@ -221,6 +233,7 @@ export class Header {
     popover.querySelectorAll('.filter-type-btn').forEach(btn => {
       btn.onclick = () => {
         this.activeFilters.type = btn.dataset.type || null;
+        this.renderActiveFiltersBar();
         eventBus.emit('search:query', { query: this.searchInput.value.trim(), ...this.activeFilters });
         popover.remove();
       };
@@ -229,6 +242,7 @@ export class Header {
     popover.querySelectorAll('.color-option').forEach(opt => {
       opt.onclick = () => {
         this.activeFilters.color = opt.dataset.color || null;
+        this.renderActiveFiltersBar();
         eventBus.emit('search:query', { query: this.searchInput.value.trim(), ...this.activeFilters });
         popover.remove();
       };
@@ -237,6 +251,7 @@ export class Header {
     popover.querySelector('#resetFiltersBtn').onclick = () => {
       this.activeFilters.type = null;
       this.activeFilters.color = null;
+      this.renderActiveFiltersBar();
       eventBus.emit('search:query', { query: this.searchInput.value.trim(), ...this.activeFilters });
       popover.remove();
     };
@@ -250,5 +265,51 @@ export class Header {
       }
     };
     setTimeout(() => document.addEventListener('click', closeHandler), 10);
+  }
+
+  renderActiveFiltersBar() {
+    if (!this.activeFiltersBar || !this.activeFiltersChips) return;
+
+    const hasFilters = Boolean(this.activeFilters.type || this.activeFilters.color);
+    if (!hasFilters) {
+      this.activeFiltersBar.classList.add('hidden');
+      this.activeFiltersChips.innerHTML = '';
+      return;
+    }
+
+    this.activeFiltersBar.classList.remove('hidden');
+    this.activeFiltersChips.innerHTML = '';
+
+    if (this.activeFilters.type) {
+      const typeLabels = {
+        checklist: 'Listes',
+        drawing: 'Dessins',
+        audio: 'Vocales'
+      };
+      const typeLabel = typeLabels[this.activeFilters.type] || this.activeFilters.type;
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.innerHTML = `<span>Type : ${typeLabel}</span><span style="cursor:pointer;margin-left:4px;font-weight:700;">×</span>`;
+      chip.querySelector('span:last-child').onclick = () => {
+        this.activeFilters.type = null;
+        this.renderActiveFiltersBar();
+        eventBus.emit('search:query', { query: this.searchInput?.value.trim() || '', ...this.activeFilters });
+      };
+      this.activeFiltersChips.appendChild(chip);
+    }
+
+    if (this.activeFilters.color) {
+      const colorObj = APP_CONFIG.NOTE_COLORS.find(c => c.id === this.activeFilters.color);
+      const colorName = colorObj?.name || this.activeFilters.color;
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.innerHTML = `<span>Couleur : ${colorName}</span><span style="cursor:pointer;margin-left:4px;font-weight:700;">×</span>`;
+      chip.querySelector('span:last-child').onclick = () => {
+        this.activeFilters.color = null;
+        this.renderActiveFiltersBar();
+        eventBus.emit('search:query', { query: this.searchInput?.value.trim() || '', ...this.activeFilters });
+      };
+      this.activeFiltersChips.appendChild(chip);
+    }
   }
 }

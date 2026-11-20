@@ -8,6 +8,7 @@ import { escapeHTML, sanitizeUrl } from '../utils/sanitize.js';
 import { formatDateTime } from '../utils/helpers.js';
 import { NotesModule } from '../modules/notes.js';
 import { ChecklistModule } from '../modules/checklist.js';
+import { RemindersModule } from '../modules/reminders.js';
 import { ArchiveModule } from '../modules/archive.js';
 import { TrashModule } from '../modules/trash.js';
 import { ShareModule } from '../modules/share.js';
@@ -24,6 +25,7 @@ export class NoteCard {
     const card = document.createElement('div');
     card.className = `note-card bg-${note.color || 'default'}`;
     card.dataset.id = note.$id;
+    card.draggable = !note.trashed;
 
     const labelMap = new Map(allLabels.map(l => [l.$id, l]));
 
@@ -167,6 +169,43 @@ export class NoteCard {
   }
 
   static bindEvents(card, note) {
+    // Drag & Drop note card reordering
+    if (!note.trashed) {
+      card.ondragstart = (e) => {
+        if (e.target.closest('button, input, [data-action="audio-play"]')) {
+          e.preventDefault();
+          return;
+        }
+        e.dataTransfer.setData('text/plain', note.$id);
+        e.dataTransfer.effectAllowed = 'move';
+        card.classList.add('dragging');
+      };
+
+      card.ondragend = () => {
+        card.classList.remove('dragging');
+        document.querySelectorAll('.note-card').forEach(c => c.classList.remove('drag-over'));
+      };
+
+      card.ondragover = (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        card.classList.add('drag-over');
+      };
+
+      card.ondragleave = () => {
+        card.classList.remove('drag-over');
+      };
+
+      card.ondrop = (e) => {
+        e.preventDefault();
+        card.classList.remove('drag-over');
+        const sourceNoteId = e.dataTransfer.getData('text/plain');
+        if (sourceNoteId && sourceNoteId !== note.$id) {
+          eventBus.emit('notes:reorder', { sourceId: sourceNoteId, targetId: note.$id });
+        }
+      };
+    }
+
     // Click card body to open full note editor modal
     card.onclick = (e) => {
       if (e.target.closest('button') || e.target.closest('input') || e.target.closest('[data-action="audio-play"]')) return;
@@ -247,6 +286,23 @@ export class NoteCard {
       };
     });
 
+    // Reminder popover
+    const reminderBtn = card.querySelector('[data-action="reminder"]');
+    if (reminderBtn) {
+      reminderBtn.onclick = (e) => {
+        e.stopPropagation();
+        this.openReminderPopover(reminderBtn, note);
+      };
+    }
+
+    // Label chips direct navigation
+    card.querySelectorAll('.chip[data-label-id]').forEach(chip => {
+      chip.onclick = (e) => {
+        e.stopPropagation();
+        eventBus.emit('view:change', { view: 'label', labelId: chip.dataset.labelId });
+      };
+    });
+
     // Color popover
     const colorBtn = card.querySelector('[data-action="color"]');
     if (colorBtn) {
@@ -307,6 +363,82 @@ export class NoteCard {
         }
       };
     }
+  }
+
+  /**
+   * Reminder picker popover for note card
+   */
+  static openReminderPopover(triggerBtn, note) {
+    document.querySelectorAll('.reminder-picker-popover').forEach(p => p.remove());
+
+    const popover = document.createElement('div');
+    popover.className = 'reminder-picker-popover';
+    popover.style.cssText = `
+      position: absolute;
+      bottom: 42px;
+      left: 0;
+      background: var(--bg-surface);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border-color);
+      padding: 12px;
+      z-index: var(--z-dropdown);
+      min-width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    `;
+
+    const now = new Date();
+    now.setHours(now.getHours() + 2);
+    const defaultTime = note.reminder?.date ? new Date(note.reminder.date).toISOString().slice(0, 16) : now.toISOString().slice(0, 16);
+
+    popover.innerHTML = `
+      <div style="font-weight:600;font-size:13px;color:var(--text-primary);">Programmer un rappel</div>
+      <input type="datetime-local" id="cardReminderDateInput" value="${defaultTime}" style="padding:6px;border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);background:var(--bg-input);">
+      <select id="cardReminderRepeatSelect" style="padding:6px;border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);background:var(--bg-input);">
+        <option value="none" ${note.reminder?.repeat === 'none' ? 'selected' : ''}>Ne pas répéter</option>
+        <option value="daily" ${note.reminder?.repeat === 'daily' ? 'selected' : ''}>Tous les jours</option>
+        <option value="weekly" ${note.reminder?.repeat === 'weekly' ? 'selected' : ''}>Toutes les semaines</option>
+      </select>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+        ${note.reminder ? `<button id="deleteCardReminderBtn" class="btn-danger" style="padding:3px 8px;font-size:11px;">Supprimer</button>` : '<div></div>'}
+        <button id="saveCardReminderBtn" class="btn-primary" style="padding:4px 10px;font-size:12px;">Enregistrer</button>
+      </div>
+    `;
+
+    const saveBtn = popover.querySelector('#saveCardReminderBtn');
+    saveBtn.onclick = (e) => {
+      e.stopPropagation();
+      const val = popover.querySelector('#cardReminderDateInput').value;
+      const repeat = popover.querySelector('#cardReminderRepeatSelect').value;
+      if (val) {
+        RemindersModule.setReminder(note.$id, new Date(val).toISOString(), repeat).then(() => {
+          Toast.show('Rappel enregistré');
+        });
+      }
+      popover.remove();
+    };
+
+    const delBtn = popover.querySelector('#deleteCardReminderBtn');
+    if (delBtn) {
+      delBtn.onclick = (e) => {
+        e.stopPropagation();
+        RemindersModule.clearReminder(note.$id).then(() => {
+          Toast.show('Rappel supprimé');
+        });
+        popover.remove();
+      };
+    }
+
+    triggerBtn.parentElement.appendChild(popover);
+    const closeHandler = (e) => {
+      if (!popover.contains(e.target) && e.target !== triggerBtn) {
+        popover.remove();
+        document.removeEventListener('click', closeHandler);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 10);
   }
 
   /**
